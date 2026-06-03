@@ -4,15 +4,15 @@ import Footer from "@/components/footer";
 export const metadata = {
   title: "About — Liran Ben Ishay",
   description:
-    "Product Manager with 6+ years in fintech, platform, and operational products. I turn ambiguous operational pain into clear product strategy, scalable workflows, and measurable outcomes.",
+    "Product Manager with 6+ years building fintech, platform, and operational products. I turn ambiguous operational pain into clear product strategy, scalable workflows, and measurable outcomes.",
 };
 
 const aiCapabilities = [
   "Build product concepts from zero — idea to structured spec to working prototype",
-  "Define UX flows and information architecture before a single line is written",
+  "Shape UX flows and information architecture before any engineering begins",
   "Use AI-assisted coding to ship real product experiences, not just wireframes",
   "Define QA checklists and acceptance criteria for every feature before release",
-  "Create validation systems that test product assumptions before engineering commits",
+  "Create validation systems that test assumptions before engineering commits",
   "Translate product thinking into working demos that hiring managers can actually use",
 ];
 
@@ -23,7 +23,7 @@ const fintechExpertise = [
   "Settlement & reconciliation",
   "Card issuing",
   "Virtual accounts",
-  "AML / financial crime case management",
+  "Financial crime case management",
   "Pricing frameworks (MCC, pre-auth, MOTO)",
   "3DS authentication",
   "Webhook configuration systems",
@@ -63,7 +63,7 @@ const philosophy = [
   },
   {
     title: "Self-service over operational dependency.",
-    body: "Every shipped feature is one step closer to the architecture where partners and merchants do not need to call support.",
+    body: "Every shipped feature is one step closer to the architecture where users do not need to call support.",
   },
 ];
 
@@ -82,9 +82,7 @@ export default function AboutPage() {
               Liran Ben Ishay
             </h1>
             <p className="max-w-2xl text-base leading-relaxed text-zinc-500 sm:text-xl">
-              Product Manager with 6+ years building fintech, platform, and internal operational
-              products. I specialize in turning ambiguous operational pain into clear product
-              strategy, scalable workflows, and measurable outcomes.
+              Product Manager · Fintech · B2B Platform Products · AI
             </p>
           </div>
 
@@ -93,36 +91,34 @@ export default function AboutPage() {
             <SectionHeader label="Background" />
             <div className="space-y-4 text-sm leading-relaxed text-zinc-600 sm:text-base">
               <p>
-                At Rapyd I own the Partner Portal (PAPO) and the Client Portal (CP) — products used
-                by ISO partners to manage merchant portfolios and by merchants to manage their payment
-                operations. I have shipped case management systems for financial crime operations,
-                rebuilt partner pricing frameworks from scratch, led large merchant migrations, and
-                scoped AI-native product features for portfolio management at scale.
+                I am a Product Manager with 6+ years of experience building fintech, platform, and
+                internal operational products. I focus on turning ambiguous operational pain into clear
+                product strategy, scalable workflows, and measurable outcomes.
+              </p>
+              <p>
+                My work spans partner portals, payment platforms, compliance systems, case management,
+                and AI product strategy. I have shipped products used by ISO partners to manage
+                merchant portfolios, by merchants to manage payment operations, and by compliance teams
+                to investigate financial crime cases at scale.
               </p>
               <p>
                 I think in systems. Every feature I scope is evaluated against a permission model,
-                a compliance constraint, and a strategic direction: reducing operational dependency
-                so partners and merchants can do things themselves without calling support.
-              </p>
-              <p>
-                I built Clearspec and the tools in this portfolio as public proof of that approach.
-                Not as a showcase — as actual working products I can hand to a hiring manager and say:
-                use this, then decide.
+                a compliance constraint, and a north star of reducing operational dependency — so
+                users can do things themselves without calling support.
               </p>
             </div>
           </div>
 
-          {/* AI-Native section — the new positioning */}
+          {/* AI-Native PM — the key differentiator */}
           <div className="mb-14">
             <SectionHeader label="AI-Native Product Building" />
             <div className="rounded-xl border border-zinc-200 bg-zinc-950 p-6 sm:p-8">
-              <p className="mb-6 text-sm leading-relaxed text-zinc-300 sm:text-base">
-                I use AI tools not only to write documents, but to build real product experiences
-                from zero. I can define the product logic, shape the UX, create working prototypes,
-                write and adjust code with AI support, and build QA systems for each feature before
-                release.
+              <p className="mb-5 text-sm leading-relaxed text-zinc-300 sm:text-base">
+                I use AI tools not only to write documents, but to build product experiences from
+                zero: shaping UX flows, creating working prototypes, adjusting code with AI support,
+                and building QA systems for each feature before release.
               </p>
-              <p className="mb-6 text-sm font-medium text-zinc-100 sm:text-base">
+              <p className="mb-6 text-sm font-semibold text-white sm:text-base">
                 I do not just define products. I build, test, validate, and iterate on them.
               </p>
               <ul className="space-y-3">
@@ -136,12 +132,12 @@ export default function AboutPage() {
             </div>
           </div>
 
-          {/* Fintech expertise */}
+          {/* Fintech domain */}
           <div className="mb-14">
             <SectionHeader label="Fintech & Platform Domain" />
             <p className="mb-5 text-sm text-zinc-500">
-              Six years of product ownership across the payment infrastructure stack. Deep domain
-              knowledge — not surface familiarity.
+              Deep domain knowledge built from years of product ownership across the payment
+              infrastructure stack — not surface familiarity.
             </p>
             <div className="flex flex-wrap gap-2">
               {fintechExpertise.map((item) => (
@@ -170,7 +166,7 @@ export default function AboutPage() {
             </div>
           </div>
 
-          {/* Philosophy */}
+          {/* How I work */}
           <div className="mb-14">
             <SectionHeader label="How I Work" />
             <div className="divide-y divide-zinc-100">
@@ -224,12 +220,10 @@ export default function AboutPage() {
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────
-
 function SectionHeader({ label }: { label: string }) {
   return (
     <div className="mb-5 flex items-center gap-4">
-      <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400 whitespace-nowrap">
+      <p className="whitespace-nowrap font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">
         {label}
       </p>
       <div className="h-px flex-1 bg-zinc-100" />

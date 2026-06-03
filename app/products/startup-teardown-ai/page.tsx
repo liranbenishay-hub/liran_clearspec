@@ -80,7 +80,7 @@ export default function StartupTeardownAIPage() {
             <div className="mb-5 flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
-                <span className="font-mono text-xs text-zinc-400">Coming Soon</span>
+                <span className="font-mono text-xs text-zinc-400">Concept</span>
               </span>
               <span className="rounded-full border border-zinc-800 px-3 py-1 font-mono text-xs text-zinc-600">
                 Input: Startup URL
@@ -242,7 +242,7 @@ export default function StartupTeardownAIPage() {
                 disabled
                 className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-zinc-800 px-6 py-3 text-sm font-medium text-zinc-500 sm:w-auto"
               >
-                Try Demo — Coming Soon
+                Demo — Concept Phase
               </button>
               <Link
                 href="/about"

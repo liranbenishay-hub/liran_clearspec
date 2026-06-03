@@ -7,7 +7,7 @@
  * The sidebar and any product listing renders from this array automatically.
  */
 
-export type ProductStatus = "live" | "beta" | "coming-soon";
+export type ProductStatus = "live" | "beta" | "concept" | "coming-soon";
 export type ProductCategory = "framework" | "ai-tool";
 export type ProductInputType = "url" | "text" | "prd" | "feature-idea";
 
@@ -53,7 +53,7 @@ export const PRODUCTS: Product[] = [
     title: "AI Product QA Auditor",
     description: "Audit any product page for UX and QA issues",
     href: "/products/ai-product-qa-auditor",
-    status: "coming-soon",
+    status: "beta",
     category: "ai-tool",
     inputType: "url",
     oneLiner: "Paste a URL. Get a structured product, UX, and QA audit.",
@@ -65,7 +65,7 @@ export const PRODUCTS: Product[] = [
     title: "PRD Critic",
     description: "Find the gaps in any product spec before engineering starts",
     href: "/products/prd-critic",
-    status: "coming-soon",
+    status: "concept",
     category: "ai-tool",
     inputType: "prd",
     oneLiner: "Paste a PRD. Get a structured gap analysis before build starts.",
@@ -77,7 +77,7 @@ export const PRODUCTS: Product[] = [
     title: "Feature Spec Generator",
     description: "Turn a rough idea into a usable product spec",
     href: "/products/feature-spec-generator",
-    status: "coming-soon",
+    status: "concept",
     category: "ai-tool",
     inputType: "feature-idea",
     oneLiner: "One paragraph in. Full structured spec out.",
@@ -89,7 +89,7 @@ export const PRODUCTS: Product[] = [
     title: "Startup Teardown AI",
     description: "Strategic product analysis of any startup",
     href: "/products/startup-teardown-ai",
-    status: "coming-soon",
+    status: "concept",
     category: "ai-tool",
     inputType: "url",
     oneLiner: "Paste a startup URL. Get ICP, UX gaps, and product opportunities.",
@@ -101,11 +101,13 @@ export const PRODUCTS: Product[] = [
 export const STATUS_LABELS: Record<ProductStatus, string> = {
   live: "",
   beta: "beta",
-  "coming-soon": "soon",
+  concept: "concept",
+  "coming-soon": "concept",
 };
 
 export const STATUS_COLORS: Record<ProductStatus, string> = {
   live: "bg-green-500",
-  beta: "bg-amber-500",
+  beta: "bg-blue-500",
+  concept: "bg-zinc-600",
   "coming-soon": "bg-zinc-600",
 };
