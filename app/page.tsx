@@ -1,4 +1,3 @@
-import Nav from "@/components/nav";
 import Hero from "@/components/homepage/hero";
 import ProblemSection from "@/components/homepage/problem-section";
 import HowItWorks from "@/components/homepage/how-it-works";
@@ -10,7 +9,6 @@ import Footer from "@/components/footer";
 export default function Home() {
   return (
     <>
-      <Nav variant="dark" />
       <main>
         <Hero />
         <ProblemSection />

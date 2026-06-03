@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Sidebar from "@/components/sidebar";
 
 export const metadata: Metadata = {
   title: "Clearspec — The PM Operating System, Built in Public",
@@ -22,7 +23,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        {children}
+        {/* Workspace shell — sidebar + content */}
+        <div className="flex min-h-screen bg-zinc-950">
+          <Sidebar />
+          {/* Content area — scrolls independently, white background */}
+          <div className="flex flex-1 flex-col overflow-y-auto bg-white">
+            {children}
+          </div>
+        </div>
       </body>
     </html>
   );

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Hero() {
   return (
-    <section className="bg-zinc-950 px-6 pb-24 pt-36">
+    <section className="bg-zinc-950 px-6 pb-24 pt-16">
       <div className="mx-auto max-w-4xl">
         {/* Eyebrow */}
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">

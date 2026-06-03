@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Nav from "@/components/nav";
 import Footer from "@/components/footer";
 
 export const metadata = {
@@ -28,9 +27,8 @@ const openQuestions = [
 export default function ExamplePage() {
   return (
     <>
-      <Nav variant="light" />
       <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-4xl px-6 pb-24 pt-28">
+        <div className="mx-auto max-w-4xl px-6 pb-24 pt-12">
 
           {/* Page header */}
           <div className="mb-12 border-b border-zinc-100 pb-10">

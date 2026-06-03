@@ -1,4 +1,3 @@
-import Nav from "@/components/nav";
 import Footer from "@/components/footer";
 import Link from "next/link";
 
@@ -67,9 +66,8 @@ const background = [
 export default function AboutPage() {
   return (
     <>
-      <Nav variant="light" />
       <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-4xl px-6 pb-24 pt-28">
+        <div className="mx-auto max-w-4xl px-6 pb-24 pt-12">
 
           {/* Page header */}
           <div className="mb-16 border-b border-zinc-100 pb-12">

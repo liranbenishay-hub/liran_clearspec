@@ -1,4 +1,3 @@
-import Nav from "@/components/nav";
 import Footer from "@/components/footer";
 import ToolFlow from "@/components/tool/tool-flow";
 import DemoController from "@/components/tool/demo-controller";
@@ -11,9 +10,8 @@ export const metadata = {
 export default function TryPage() {
   return (
     <>
-      <Nav variant="light" />
       <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-3xl px-6 pb-24 pt-28">
+        <div className="mx-auto max-w-3xl px-6 pb-24 pt-12">
 
           {/* Page header */}
           <div className="mb-12 border-b border-zinc-100 pb-10">
