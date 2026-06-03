@@ -3,14 +3,13 @@ import "./globals.css";
 import Sidebar from "@/components/sidebar";
 
 export const metadata: Metadata = {
-  title: "Clearspec — The PM Operating System, Built in Public",
+  title: "Liran Ben Ishay — Product Manager",
   description:
-    "Most PM tools help you write documents. Clearspec forces you to think first. A structured framework for product decisions, tradeoffs, and decision records — extracted from real PM work.",
-  keywords: ["product management", "PM framework", "decision record", "product strategy", "PM operating system"],
+    "Product Manager with 6+ years in fintech, B2B SaaS, and platform products. Building Clearspec — the PM Operating System, built in public.",
+  keywords: ["product management", "PM portfolio", "fintech", "Clearspec", "Liran Ben Ishay"],
   openGraph: {
-    title: "Clearspec — The PM Operating System, Built in Public",
-    description:
-      "Most PM tools help you write documents. Clearspec forces you to think first.",
+    title: "Liran Ben Ishay — Product Manager",
+    description: "Product Manager · Fintech · Platform Products · AI",
     type: "website",
   },
 };
@@ -21,14 +20,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">
-        {/* Workspace shell — sidebar + content */}
-        <div className="flex min-h-screen bg-zinc-950">
+    <html lang="en" className="h-full">
+      <body className="font-sans antialiased h-full">
+        <div className="flex min-h-full bg-zinc-950">
+          {/* Fixed sidebar — lg: always visible, <lg: drawer */}
           <Sidebar />
-          {/* Content area — scrolls independently, white background */}
-          <div className="flex flex-1 flex-col overflow-y-auto bg-white">
-            {children}
+
+          {/* Content area */}
+          <div className="flex flex-1 flex-col overflow-x-hidden bg-white lg:ml-60">
+            {/* Spacer for mobile top bar */}
+            <div className="h-14 shrink-0 lg:hidden" />
+            {/* Page content */}
+            <div className="flex flex-1 flex-col">
+              {children}
+            </div>
           </div>
         </div>
       </body>

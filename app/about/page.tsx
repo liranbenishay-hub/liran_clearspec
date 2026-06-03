@@ -1,235 +1,282 @@
-import Footer from "@/components/footer";
 import Link from "next/link";
+import Footer from "@/components/footer";
 
 export const metadata = {
-  title: "About — Clearspec",
-  description:
-    "Liran Ben Ishay is a Product Manager with six years in fintech. Clearspec is the PM Operating System he built for himself, made public.",
+  title: "About — Liran Ben Ishay",
+  description: "Product Manager with 6+ years in fintech, B2B SaaS, and platform products. Based in Israel.",
 };
+
+const background = [
+  { area: "Role", detail: "Product Manager at Rapyd (CashDash organization)" },
+  { area: "Location", detail: "Tel Aviv, Israel (IDT, GMT+3)" },
+  { area: "Domain", detail: "B2B fintech · Partner portals · Payment platforms · Compliance systems" },
+  { area: "Experience", detail: "6 years · 13+ major initiatives shipped or in-flight" },
+  { area: "Emerging", detail: "AI product strategy · Agentic systems · PM workflow automation" },
+];
 
 const philosophy = [
   {
-    principle: "Operational pain before features.",
-    explanation:
-      "Discovery starts from a broken process, not a user wish list. If you can't name the broken workflow in one sentence, you don't have a product problem yet — you have a feature request.",
+    title: "Operational pain before features.",
+    body: "Discovery starts from a broken process, not a user wish list. If you cannot name the broken workflow in one sentence, you do not have a product problem yet.",
   },
   {
-    principle: "Tradeoffs are first-class objects.",
-    explanation:
-      "Every real decision has a viable rejected option. Naming it — and what it would have given up — is not optional. It's what makes a decision defensible when circumstances change.",
+    title: "Tradeoffs are first-class objects.",
+    body: "Every real decision has a viable rejected option. Naming what each approach gives up is what makes a decision defensible when circumstances change.",
   },
   {
-    principle: "The 80% case ships fast. The 20% is named, not abandoned.",
-    explanation:
-      "Deferred scope is always named and tracked. The Phase 2 ticket is created at the same time as Phase 1 scoping. Nothing is abandoned — it's sequenced.",
+    title: "Ship the 80% case. Name the 20%.",
+    body: "Deferred scope is sequenced, not abandoned. The Phase 2 ticket is created at the same time as Phase 1 scoping.",
   },
   {
-    principle: "Compliance and audit trail are constraints, not tradeoffs.",
-    explanation:
-      "They shape data architecture before UX decisions. Soft deletes over hard deletes. Case IDs on all communications. Control authority is assigned at the right layer before shipping.",
+    title: "Compliance and audit trail beat UX flexibility.",
+    body: "They shape data architecture before UX decisions. Soft deletes. Case IDs on communications. Control authority resolved before shipping.",
   },
   {
-    principle: "Self-service over operational dependency.",
-    explanation:
-      "The north star: if a partner or merchant can do it safely themselves, they should. Every shipped feature is one step closer to the architecture where people don't need to call support.",
+    title: "Self-service over operational dependency.",
+    body: "Every shipped feature is one step closer to the architecture where partners and merchants do not need to call support.",
   },
   {
-    principle: "AI eliminates operational work, not thinking.",
-    explanation:
-      "AI features are prioritized by what operational work they remove entirely. Agentic actions first. Revenue alerts second. Contextual hints last. Easier to build is not a prioritization criterion.",
+    title: "AI eliminates work, not thinking.",
+    body: "Agentic actions first. Revenue alerts second. Contextual hints last. Easier to build is not a prioritization criterion.",
   },
 ];
 
-const background = [
-  {
-    area: "Domain",
-    detail: "B2B fintech · Partner portals · Payment platforms · Compliance systems · AI product strategy",
-  },
-  {
-    area: "Product work",
-    detail: "13+ major initiatives · 18+ documented cross-team decisions · 6 years",
-  },
-  {
-    area: "Specializations",
-    detail: "Platform architecture · ISO partner portals · KYB/KYC flows · Settlement & reconciliation · Card issuing · Case management",
-  },
-  {
-    area: "AI work",
-    detail: "Scoped and architected an AI assistant for ISO partner portfolio management. Defined three-layer architecture: agentic actions → revenue alerts → contextual hints.",
-  },
-  {
-    area: "Operating model",
-    detail: "Simultaneously at feature-spec depth and business unit strategic level. Sole spec author on all primary-ownership initiatives.",
-  },
+const skills = [
+  "Product Discovery",
+  "PRD Authorship",
+  "Platform Architecture",
+  "Permission Systems",
+  "Compliance Products",
+  "B2B Partner Portals",
+  "Payment Infrastructure",
+  "AI Product Strategy",
+  "Roadmap Planning",
+  "Cross-functional Alignment",
+  "Data-driven Decisions",
+  "SQL",
+  "Figma",
+  "Amplitude · Fullstory · GA4",
+];
+
+const fintech = [
+  "Payment processing APIs",
+  "ISO partner portals",
+  "KYB / KYC flows",
+  "Settlement & reconciliation",
+  "Card issuing",
+  "Virtual accounts",
+  "AML / financial crime case management",
+  "Pricing frameworks (MCC, pre-auth, MOTO)",
 ];
 
 export default function AboutPage() {
   return (
     <>
       <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-4xl px-6 pb-24 pt-12">
+        <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8 sm:pt-12">
 
-          {/* Page header */}
-          <div className="mb-16 border-b border-zinc-100 pb-12">
+          {/* Header */}
+          <div className="mb-12 border-b border-zinc-100 pb-10">
             <p className="mb-3 font-mono text-xs font-medium uppercase tracking-widest text-zinc-400">
-              The Builder
+              About
             </p>
-            <h1 className="mb-4 text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
+            <h1 className="mb-2 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
               Liran Ben Ishay
             </h1>
-            <p className="text-xl text-zinc-500 leading-relaxed max-w-2xl">
+            <p className="text-base text-zinc-500 sm:text-xl">
               Product Manager · Fintech · B2B Platform Products
             </p>
           </div>
 
-          {/* Why I built this */}
-          <section className="mb-20">
-            <h2 className="mb-8 text-2xl font-semibold tracking-tight text-zinc-900">
-              Why I built Clearspec.
-            </h2>
-            <div className="space-y-6 text-base leading-relaxed text-zinc-600 max-w-3xl">
+          {/* Bio */}
+          <div className="mb-14">
+            <div className="space-y-5 text-sm leading-relaxed text-zinc-600 sm:text-base">
               <p>
-                I'm a Product Manager with six years in fintech — partner portals, payment
-                platforms, compliance systems, and AI product strategy. I've shipped case
-                management systems for financial crime operations, rebuilt partner pricing
-                frameworks from scratch, and scoped AI products for ISO partners managing
-                hundreds of merchants simultaneously.
+                I am a Product Manager with six years building fintech platforms, payment systems, partner portals,
+                and compliance products. My primary ownership at Rapyd covers the Partner Portal (PAPO) and Client
+                Portal (CP) — products used by ISO partners to manage merchant portfolios and by merchants to manage
+                their payment operations.
               </p>
               <p>
-                Over those years I noticed something. Every time a new person joined my team, I
-                had to re-explain why a decision was made. Why we soft-delete instead of
-                hard-delete. Why ISO merchants don't get direct support access. Why the permission
-                tier must be resolved before design starts. The knowledge lived in my head, not
-                in a system. When I was on reserve duty, it lived nowhere.
+                I think in systems. Every feature I scope is evaluated against a three-tier permission model
+                (platform control → partner control → merchant control), a set of compliance constraints that
+                shape data architecture before UX decisions, and a north star of reducing operational dependency —
+                partners and merchants doing things themselves without calling support.
               </p>
               <p>
-                I started documenting decisions differently. Not just what was decided, but what
-                was rejected and why. Not just the scope, but what was deferred and when it would
-                be revisited. Not just the KPIs, but the operational failure that made those
-                KPIs the right ones. After six years, I had a complete operating system — one
-                that had been stress-tested across compliance audits, CEO-flagged migration
-                emergencies, cross-team ownership disputes, and post-launch adoption failures.
-              </p>
-              <p>
-                Clearspec is that system, made public. Not as a portfolio. As a product — one
-                that any PM can actually use to make better decisions faster. The methodology
-                here is not borrowed from books. It was extracted from real decisions, real
-                tradeoffs, and real post-mortems. Some of those decisions were right. A few were
-                wrong. All of them are in here.
+                I built Clearspec as the public version of the PM operating system I developed for myself over six
+                years. The methodology here was extracted from real decisions, real tradeoffs, and real post-mortems.
+                Some of those decisions were right. A few were wrong. All of them are documented.
               </p>
             </div>
-          </section>
+          </div>
 
-          {/* Background grid */}
-          <section className="mb-20">
-            <h2 className="mb-8 text-2xl font-semibold tracking-tight text-zinc-900">
-              Background.
-            </h2>
-            <div className="divide-y divide-zinc-100">
+          {/* Background table */}
+          <div className="mb-14">
+            <SectionHeader label="Background" />
+            <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-100">
               {background.map((item) => (
-                <div
-                  key={item.area}
-                  className="grid grid-cols-1 gap-2 py-5 sm:grid-cols-4"
-                >
-                  <div className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400 sm:pt-0.5">
+                <div key={item.area} className="grid grid-cols-1 gap-1 px-5 py-4 sm:grid-cols-4">
+                  <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400 sm:pt-0.5">
                     {item.area}
-                  </div>
-                  <div className="text-sm leading-relaxed text-zinc-600 sm:col-span-3">
-                    {item.detail}
-                  </div>
+                  </p>
+                  <p className="text-sm leading-relaxed text-zinc-600 sm:col-span-3">{item.detail}</p>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
+
+          {/* Fintech expertise */}
+          <div className="mb-14">
+            <SectionHeader label="Fintech Expertise" />
+            <p className="mb-5 text-sm text-zinc-500">
+              Deep domain knowledge across the payment infrastructure stack, built from 6 years of product
+              ownership in a global fintech platform.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {fintech.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* AI experience */}
+          <div className="mb-14">
+            <SectionHeader label="AI & Platform Products" />
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-6">
+              <p className="mb-4 text-sm leading-relaxed text-zinc-600">
+                I scope and build AI-native product features — not as experiments, but as architectural decisions
+                grounded in operational impact. My AI product framework prioritizes capabilities by what operational
+                work they eliminate entirely, not by what is technically impressive.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[
+                  {
+                    label: "Layer 1 — Agentic Actions",
+                    text: "Natural language → bulk operations. Replaces manual processes entirely. Highest priority.",
+                  },
+                  {
+                    label: "Layer 2 — Revenue Alerts",
+                    text: "Proactive pushed alerts without user action. Replaces manual monitoring dashboards.",
+                  },
+                  {
+                    label: "Layer 3 — Contextual Hints",
+                    text: "Lightweight in-context nudges. Useful but not a priority over Layers 1 and 2.",
+                  },
+                ].map((layer) => (
+                  <div key={layer.label} className="rounded-lg border border-zinc-200 bg-white p-4">
+                    <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                      {layer.label}
+                    </p>
+                    <p className="text-xs leading-relaxed text-zinc-500">{layer.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Skills */}
+          <div className="mb-14">
+            <SectionHeader label="Skills" />
+            <div className="flex flex-wrap gap-2">
+              {skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </div>
 
           {/* Product philosophy */}
-          <section className="mb-20">
-            <h2 className="mb-8 text-2xl font-semibold tracking-tight text-zinc-900">
-              Product philosophy.
-            </h2>
-            <p className="mb-8 max-w-2xl text-zinc-500">
-              These are not principles I adopted from books. They are rules that consistently
-              govern decisions — extracted from actual behavior across six years and 13 major
-              initiatives.
+          <div className="mb-14">
+            <SectionHeader label="Product Philosophy" />
+            <p className="mb-6 text-sm text-zinc-500">
+              These are not principles adopted from books. They are rules extracted from actual behavior across
+              six years of documented product decisions.
             </p>
-            <div className="space-y-0 divide-y divide-zinc-100">
-              {philosophy.map((item, i) => (
-                <div key={i} className="py-7">
-                  <h3 className="mb-3 text-base font-semibold text-zinc-900">
-                    {item.principle}
+            <div className="divide-y divide-zinc-100">
+              {philosophy.map((item) => (
+                <div key={item.title} className="py-6">
+                  <h3 className="mb-2 text-sm font-semibold text-zinc-900 sm:text-base">
+                    {item.title}
                   </h3>
-                  <p className="max-w-2xl text-sm leading-relaxed text-zinc-500">
-                    {item.explanation}
-                  </p>
+                  <p className="max-w-2xl text-sm leading-relaxed text-zinc-500">{item.body}</p>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
 
-          {/* What Clearspec is NOT */}
-          <section className="mb-20">
-            <h2 className="mb-8 text-2xl font-semibold tracking-tight text-zinc-900">
-              What Clearspec is not.
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {[
-                {
-                  label: "Not a portfolio",
-                  text: "It doesn't describe what I built. It demonstrates how I decide. The product is the proof.",
-                },
-                {
-                  label: "Not an AI wrapper",
-                  text: "The structured questioning flow is the methodology. AI is secondary — used only where it removes operational work, not to generate the thinking.",
-                },
-                {
-                  label: "Not a generic framework",
-                  text: "Generic frameworks are correct in the abstract and useless in the specific. Every rule in Clearspec has a real decision behind it.",
-                },
-                {
-                  label: "Not complete",
-                  text: "This is V1. The Phase 2 list exists. Saved records, export, and AI-assisted elaboration are committed and tracked — not abandoned.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-lg border border-zinc-100 bg-zinc-50 p-6"
-                >
-                  <p className="mb-2 font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">
-                    {item.label}
-                  </p>
-                  <p className="text-sm leading-relaxed text-zinc-600">{item.text}</p>
-                </div>
-              ))}
+          {/* Contact */}
+          <div className="mb-10">
+            <SectionHeader label="Contact" />
+            <div className="flex flex-wrap gap-3">
+              <ContactLink label="Email" href="mailto:liranb@rapyd.net" value="liranb@rapyd.net" />
+              <ContactLink label="LinkedIn" href="#" value="linkedin.com/in/liran (placeholder)" />
+              <ContactLink label="GitHub" href="#" value="github.com/liran (placeholder)" />
             </div>
-          </section>
+            <p className="mt-3 text-xs text-zinc-400 italic">* Replace contact links with actual URLs.</p>
+          </div>
 
-          {/* CTA strip */}
-          <section className="rounded-xl border border-zinc-900 bg-zinc-950 p-10 text-center">
-            <h2 className="mb-4 text-2xl font-semibold text-white">
-              Try the framework on a real problem.
-            </h2>
-            <p className="mb-8 text-zinc-400">
-              Six questions. One decision record. No account required.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Link
-                href="/try"
-                className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-100"
-              >
-                Try the Framework →
-              </Link>
-              <Link
-                href="/example"
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-6 py-3 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
-              >
-                See an example
-              </Link>
-            </div>
-          </section>
+          {/* CTAs */}
+          <div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-10">
+            <Link
+              href="/products/pm-operating-system"
+              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-700"
+            >
+              Try the Framework →
+            </Link>
+            <Link
+              href="/resume"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:text-zinc-900"
+            >
+              View Resume
+            </Link>
+          </div>
 
         </div>
       </main>
       <Footer />
     </>
+  );
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="mb-5 flex items-center gap-4">
+      <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">
+        {label}
+      </p>
+      <div className="h-px flex-1 bg-zinc-100" />
+    </div>
+  );
+}
+
+function ContactLink({
+  label,
+  href,
+  value,
+}: {
+  label: string;
+  href: string;
+  value: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="inline-flex flex-col rounded-lg border border-zinc-200 px-4 py-3 text-xs transition-colors hover:border-zinc-400"
+    >
+      <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+        {label}
+      </span>
+      <span className="mt-0.5 text-zinc-600">{value}</span>
+    </a>
   );
 }
