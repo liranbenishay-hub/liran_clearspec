@@ -21,6 +21,7 @@ export interface Product {
   inputType: ProductInputType;
   oneLiner: string;         // Tagline / subtitle on product page
   whyItMatters: string;     // PM positioning — what this demonstrates
+  hideFromNav?: boolean;    // If true, hidden from sidebar but page still exists
 }
 
 export const PRODUCTS: Product[] = [
@@ -47,6 +48,7 @@ export const PRODUCTS: Product[] = [
     oneLiner: "Seven questions. One structured decision record.",
     whyItMatters:
       "Shows a complete product thinking workflow — from operational pain to tradeoff documentation — applied to any product problem.",
+    hideFromNav: true,
   },
   {
     id: "ai-product-qa-auditor",

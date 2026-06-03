@@ -152,7 +152,7 @@ export default function Sidebar() {
           <div className="mt-3">
             <SectionLabel icon={<IconBox />} label="Products" />
             <div className="mt-1 space-y-0.5 pl-2">
-              {PRODUCTS.map((product) => (
+              {PRODUCTS.filter((p) => !p.hideFromNav).map((product) => (
                 <SubNavItem
                   key={product.id}
                   href={product.href}

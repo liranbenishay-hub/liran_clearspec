@@ -4,6 +4,7 @@ export interface OpenQuestion {
 }
 
 export interface ToolState {
+  productTitle: string;          // New: product / feature name for PRD header
   problemStatement: string;
   operationalPain: string;
   currentWorkaround: string;
@@ -17,6 +18,7 @@ export interface ToolState {
 }
 
 export const EMPTY_TOOL_STATE: ToolState = {
+  productTitle: "",
   problemStatement: "",
   operationalPain: "",
   currentWorkaround: "",
@@ -30,6 +32,7 @@ export const EMPTY_TOOL_STATE: ToolState = {
 };
 
 export type StepId =
+  | "title"
   | "problem"
   | "pain"
   | "workaround"
