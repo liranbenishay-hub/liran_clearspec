@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSidebar } from "@/contexts/sidebar-context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -568,13 +569,17 @@ interface PRDDisplayProps {
   flashKeys: Partial<Record<PRDKey, number>>;
   onCopy: () => void;
   copied: boolean;
+  completeness: number;
 }
 
-function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps) {
+function PRDDisplay({ prd, sources, flashKeys, onCopy, copied, completeness }: PRDDisplayProps) {
   const getSource = (key: PRDKey): Source => sources[key] ?? "ai";
 
-  const sectionClass = (key: PRDKey) =>
-    `transition-all duration-300 ${(flashKeys[key] ?? 0) > 0 ? "bg-green-900/30" : ""}`;
+  // id for scroll targeting + subtle green flash when updated
+  const sectionProps = (key: PRDKey) => ({
+    id: `prd-section-${key}`,
+    className: `rounded-sm p-1 -m-1 transition-all duration-500 ${(flashKeys[key] ?? 0) > 0 ? "bg-green-900/25 ring-1 ring-green-800/40" : ""}`,
+  });
 
   return (
     <div>
@@ -596,6 +601,25 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
         >
           Review with PRD Critic →
         </a>
+      </div>
+
+      {/* Completeness score */}
+      <div className="mb-4 flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5">
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-widest text-zinc-500 whitespace-nowrap">
+          PRD Completeness
+        </span>
+        <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-zinc-200">
+          <div
+            className="h-full rounded-full bg-zinc-800 transition-all duration-500"
+            style={{ width: `${completeness}%` }}
+          />
+        </div>
+        <span className={`font-mono text-sm font-semibold tabular-nums whitespace-nowrap ${completeness === 100 ? "text-green-600" : "text-zinc-700"}`}>
+          {completeness}%
+        </span>
+        {completeness === 100 && (
+          <span className="font-mono text-[10px] text-green-600">✓ complete</span>
+        )}
       </div>
 
       {/* Document */}
@@ -629,7 +653,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             </div>
 
             {/* Problem Statement */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("problemStatement")}`}>
+            <div {...sectionProps("problemStatement")}>
               <div className="mb-1 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">PROBLEM STATEMENT</div>
                 <SourceBadge source={getSource("problemStatement")} />
@@ -638,7 +662,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             </div>
 
             {/* Target Users */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("targetUsers")}`}>
+            <div {...sectionProps("targetUsers")}>
               <div className="mb-1 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">TARGET USERS</div>
                 <SourceBadge source={getSource("targetUsers")} />
@@ -649,7 +673,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             <div className="border-t border-zinc-800" />
 
             {/* Goals */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("goals")}`}>
+            <div {...sectionProps("goals")}>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">GOALS</div>
                 <SourceBadge source={getSource("goals")} />
@@ -664,7 +688,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             </div>
 
             {/* KPIs */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("kpis")}`}>
+            <div {...sectionProps("kpis")}>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">SUCCESS METRICS / KPIs</div>
                 <SourceBadge source={getSource("kpis")} />
@@ -681,7 +705,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             <div className="border-t border-zinc-800" />
 
             {/* MVP Scope */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("mvpBuild")}`}>
+            <div {...sectionProps("mvpBuild")}>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">MVP SCOPE</div>
                 <SourceBadge source={getSource("mvpBuild")} />
@@ -711,7 +735,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             <div className="border-t border-zinc-800" />
 
             {/* Risks */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("risks")}`}>
+            <div {...sectionProps("risks")}>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">RISKS & ASSUMPTIONS</div>
                 <SourceBadge source={getSource("risks")} />
@@ -735,7 +759,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             </div>
 
             {/* Tradeoffs */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("tradeoffs")}`}>
+            <div {...sectionProps("tradeoffs")}>
               <div className="mb-1 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">TRADEOFFS</div>
                 <SourceBadge source={getSource("tradeoffs")} />
@@ -744,7 +768,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             </div>
 
             {/* Rollout */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("rollout")}`}>
+            <div {...sectionProps("rollout")}>
               <div className="mb-1 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">ROLLOUT PLAN</div>
                 <SourceBadge source={getSource("rollout")} />
@@ -753,7 +777,7 @@ function PRDDisplay({ prd, sources, flashKeys, onCopy, copied }: PRDDisplayProps
             </div>
 
             {/* Open Questions */}
-            <div className={`rounded-sm p-1 -m-1 ${sectionClass("openQuestions")}`}>
+            <div {...sectionProps("openQuestions")}>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">OPEN QUESTIONS</div>
                 <SourceBadge source={getSource("openQuestions")} />
@@ -789,45 +813,53 @@ interface EnrichmentCardProps {
 
 function EnrichmentCardView({ card, onAnswer }: EnrichmentCardProps) {
   const [draft, setDraft] = useState(card.answer);
+  const [focused, setFocused] = useState(false);
 
   if (card.answered) {
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-green-600">✓</span>
+      <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-green-600 text-xs">✓</span>
             <p className="text-xs font-semibold text-green-800">{card.title}</p>
           </div>
-          <span className="font-mono text-[9px] text-green-600">PRD updated</span>
+          <span className="font-mono text-[9px] text-green-500 shrink-0">applied</span>
         </div>
-        <p className="mt-2 text-xs text-green-700 line-clamp-2">{card.answer}</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
-      <div className="mb-2 flex items-start gap-2">
-        <span className="text-base leading-none mt-0.5">{card.icon}</span>
-        <div>
-          <p className="text-xs font-semibold text-zinc-900">{card.title}</p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{card.explanation}</p>
-        </div>
+    <div className={`rounded-lg border bg-white p-3 transition-colors ${focused ? "border-zinc-400" : "border-zinc-200"}`}>
+      {/* Header row */}
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="text-sm leading-none">{card.icon}</span>
+        <p className="text-xs font-semibold text-zinc-900">{card.title}</p>
+        <span className="ml-auto font-mono text-[9px] text-zinc-400 shrink-0">
+          {card.explanation.split(" ").slice(0, 6).join(" ")}…
+        </span>
       </div>
-      <p className="mb-2 text-xs font-medium text-zinc-700">{card.question}</p>
+
+      {/* Question */}
+      <p className="mb-2 text-xs font-medium leading-snug text-zinc-700">{card.question}</p>
+
+      {/* Input */}
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder={card.placeholder}
-        rows={3}
-        className="w-full resize-none rounded-lg border border-zinc-200 px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-1"
+        rows={2}
+        className="w-full resize-none rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-800"
       />
+
       <button
         onClick={() => { if (draft.trim()) onAnswer(card.id, draft.trim()); }}
         disabled={!draft.trim()}
-        className="mt-2 w-full rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+        className="mt-2 w-full rounded-md bg-zinc-900 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Update PRD ↑
+        Apply to PRD ↑
       </button>
     </div>
   );
@@ -854,12 +886,40 @@ export default function PMCopilot() {
   const [flashKeys, setFlashKeys] = useState<Partial<Record<PRDKey, number>>>({});
   const [copied, setCopied] = useState(false);
   const draftRef = useRef<HTMLDivElement>(null);
+  const { setCollapsed } = useSidebar();
+
+  // ── Completeness score: 50% base + up to 50% from enrichments
+  const answeredCountGlobal = cards.filter((c) => c.answered).length;
+  const totalCards = cards.length || 6;
+  const completeness = totalCards > 0
+    ? Math.round(50 + (answeredCountGlobal / totalCards) * 50)
+    : 50;
+
+  // ── Collapse sidebar when PRD draft is active; restore on unmount
+  useEffect(() => {
+    if (copilotState === "draft") {
+      setCollapsed(true);
+    } else {
+      setCollapsed(false);
+    }
+    return () => setCollapsed(false);
+  }, [copilotState, setCollapsed]);
 
   const EXAMPLES = [
     "Partners struggle to create pricing packages — there are too many options with no guidance",
     "Merchants abandon onboarding halfway through and we don't know why",
     "Users cannot find the most important actions — they are buried in the navigation",
   ];
+
+  // ── Scroll to a PRD section by its data-id attribute
+  function scrollToSection(key: PRDKey) {
+    // Small delay to let React update the DOM first
+    setTimeout(() => {
+      const el = document.getElementById(`prd-section-${key}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 60);
+  }
 
   async function generate() {
     if (!inputText.trim()) { setInputError("Describe what you are trying to build — even one sentence is enough."); return; }
@@ -876,10 +936,8 @@ export default function PMCopilot() {
     const generatedPRD = generatePRD(inputText);
     const enrichCards = buildEnrichmentCards(generatedPRD);
 
-    // All sections start as AI-suggested
     const initialSources: Partial<Record<PRDKey, Source>> = {};
     (Object.keys(generatedPRD) as PRDKey[]).forEach((k) => { initialSources[k] = "ai"; });
-    // Problem statement is based on user input — mark as confirmed
     initialSources.problemStatement = "user";
 
     setPrd(generatedPRD);
@@ -900,16 +958,15 @@ export default function PMCopilot() {
     const updatedPRD = { ...prd, ...updates };
     setPrd(updatedPRD);
 
-    // Mark the affected section as user-confirmed
     const affectedKey = card.affectsKey;
     setSources((s) => ({ ...s, [affectedKey]: "user" as Source }));
 
-    // Flash the updated section
+    // Flash + scroll to the updated section
     const flashNum = Date.now();
     setFlashKeys((f) => ({ ...f, [affectedKey]: flashNum }));
-    setTimeout(() => setFlashKeys((f) => ({ ...f, [affectedKey]: 0 })), 1000);
+    setTimeout(() => setFlashKeys((f) => ({ ...f, [affectedKey]: 0 })), 1200);
+    scrollToSection(affectedKey);
 
-    // Mark card as answered
     setCards((cs) => cs.map((c) => c.id === cardId ? { ...c, answered: true, answer } : c));
   }
 
@@ -1068,7 +1125,7 @@ export default function PMCopilot() {
 
   // ── Draft ────────────────────────────────────────────────────────────────
   if (copilotState === "draft" && prd) {
-    const answeredCount = cards.filter((c) => c.answered).length;
+    const answeredCount = answeredCountGlobal; // from top-level state
     const unansweredCards = cards.filter((c) => !c.answered);
     const answeredCards = cards.filter((c) => c.answered);
 
@@ -1127,6 +1184,7 @@ export default function PMCopilot() {
               flashKeys={flashKeys}
               onCopy={handleCopy}
               copied={copied}
+              completeness={completeness}
             />
           </div>
 

@@ -562,6 +562,29 @@ const P_CONFIG = {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const DEFAULT_CATEGORY_ORDER: Category[] = [
+  "Product clarity",
+  "UX friction",
+  "Mobile responsiveness",
+  "Trust signals",
+  "Conversion",
+  "Accessibility",
+  "QA risk",
+  "AI-builder risk",
+];
+
+const CAT_DOTS: Partial<Record<Category, string>> = {
+  "Product clarity": "bg-blue-400",
+  "UX friction": "bg-amber-400",
+  "Mobile responsiveness": "bg-purple-400",
+  "Trust signals": "bg-green-400",
+  "Conversion": "bg-red-400",
+  "Accessibility": "bg-cyan-400",
+  "QA risk": "bg-orange-400",
+  "AI-builder risk": "bg-pink-400",
+  "Content quality": "bg-zinc-400",
+};
+
 export default function AuditTool() {
   const [auditState, setAuditState] = useState<AuditState>("idle");
   const [url, setUrl] = useState("");
@@ -569,6 +592,11 @@ export default function AuditTool() {
   const [result, setResult] = useState<AuditResult | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // Category order state
+  const [categoryOrder, setCategoryOrder] = useState<Category[]>(DEFAULT_CATEGORY_ORDER);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -578,12 +606,54 @@ export default function AuditTool() {
 
   const resultRef = useRef<HTMLDivElement>(null);
 
-  // Lock body scroll when drawer is open on mobile
   useEffect(() => {
     if (drawerOpen) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
     return () => { document.body.style.overflow = ""; };
   }, [drawerOpen]);
+
+  // ── Drag handlers ─────────────────────────────────────────────────────────
+  function handleDragStart(e: React.DragEvent, idx: number) {
+    setDragIdx(idx);
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIdx(idx);
+  }
+  function handleDrop(e: React.DragEvent, targetIdx: number) {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === targetIdx) { setDragIdx(null); setDragOverIdx(null); return; }
+    const next = [...categoryOrder];
+    const [removed] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, removed);
+    setCategoryOrder(next);
+    setDragIdx(null);
+    setDragOverIdx(null);
+  }
+  function handleDragEnd() { setDragIdx(null); setDragOverIdx(null); }
+
+  function moveCategory(from: number, to: number) {
+    if (to < 0 || to >= categoryOrder.length) return;
+    const next = [...categoryOrder];
+    const [removed] = next.splice(from, 1);
+    next.splice(to, 0, removed);
+    setCategoryOrder(next);
+  }
+
+  // ── Sort findings by user category priority, then urgency ─────────────────
+  function sortFindings(findings: AuditFinding[]): AuditFinding[] {
+    const catPriority: Record<string, number> = Object.fromEntries(
+      categoryOrder.map((c, i) => [c, i])
+    );
+    const issuePriority = { urgent: 0, important: 1, later: 2 };
+    return [...findings].sort((a, b) => {
+      const catDiff = (catPriority[a.category] ?? 999) - (catPriority[b.category] ?? 999);
+      if (catDiff !== 0) return catDiff;
+      return (issuePriority[a.priority] ?? 3) - (issuePriority[b.priority] ?? 3);
+    });
+  }
 
   function normalise(raw: string) {
     const t = raw.trim();
@@ -609,6 +679,7 @@ export default function AuditTool() {
   function reset() {
     setAuditState("idle"); setUrl(""); setResult(null); setError(""); setCopied(false);
     setDrawerOpen(false); setSelectedFinding(null);
+    setCategoryOrder(DEFAULT_CATEGORY_ORDER);
   }
 
   function openDrawer(finding: AuditFinding) {
@@ -627,10 +698,11 @@ export default function AuditTool() {
 
   function copyFullReport() {
     if (!result) return;
-    const text = result.findings.map((f) =>
+    const sorted = sortFindings(result.findings);
+    const text = sorted.map((f) =>
       `[${f.priority.toUpperCase()}] ${f.category}\n${f.issue}\nWhy: ${f.whyItMatters}\nFix: ${f.suggestedFix}`
     ).join("\n\n");
-    navigator.clipboard.writeText(`AI Builder QA Audit — ${result.domain}\n\n${text}\n\nDemo audit based on URL pattern and product heuristics`).catch(() => null);
+    navigator.clipboard.writeText(`AI Builder QA Audit — ${result.domain}\nPrioritised by: ${categoryOrder.slice(0, 3).join(", ")}\n\n${text}\n\nDemo audit based on URL pattern and product heuristics`).catch(() => null);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -640,9 +712,11 @@ export default function AuditTool() {
     <div className="rounded-xl border border-zinc-200 bg-white p-6 sm:p-8">
       <p className="mb-2 font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">Run an audit</p>
       <p className="mb-5 text-sm text-zinc-500">
-        Enter the URL of your AI-built site. Get a prioritised issue table with ready-to-copy fix prompts for your builder.
+        Enter the URL of your AI-built site. Drag the category pills to prioritise which issues appear first in the audit.
       </p>
-      <div className="flex flex-col gap-3 sm:flex-row">
+
+      {/* URL input */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="flex flex-1 flex-col gap-1">
           <input
             type="text" value={url}
@@ -658,7 +732,83 @@ export default function AuditTool() {
           Run audit →
         </button>
       </div>
-      <p className="mt-4 text-xs text-zinc-400">Demo audit based on URL pattern and product heuristics · No page crawling · No data stored</p>
+
+      {/* Category priority tags */}
+      <div className="border-t border-zinc-100 pt-5">
+        <div className="mb-3 flex items-center gap-2">
+          <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">
+            Audit priority
+          </p>
+          <span className="text-xs text-zinc-400">— drag to reorder · leftmost = highest priority</span>
+        </div>
+
+        {/* Desktop: draggable */}
+        <div className="hidden flex-wrap gap-2 sm:flex">
+          {categoryOrder.map((cat, idx) => (
+            <div
+              key={cat}
+              draggable
+              onDragStart={(e) => handleDragStart(e, idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDrop={(e) => handleDrop(e, idx)}
+              onDragEnd={handleDragEnd}
+              className={`
+                flex cursor-grab select-none items-center gap-1.5 rounded-full border px-3 py-1.5
+                font-mono text-xs transition-all duration-100 active:cursor-grabbing
+                ${dragIdx === idx ? "opacity-40 scale-95" : ""}
+                ${dragOverIdx === idx && dragIdx !== idx ? "border-zinc-400 bg-zinc-800 text-zinc-200" : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"}
+              `}
+            >
+              {/* Drag handle dots */}
+              <span className="text-zinc-700 text-[9px] leading-none">⠿</span>
+              {/* Category colour dot */}
+              <span className={`h-1.5 w-1.5 rounded-full ${CAT_DOTS[cat] ?? "bg-zinc-600"}`} />
+              {/* Position badge for top 3 */}
+              {idx < 3 && (
+                <span className={`font-mono text-[9px] font-bold ${idx === 0 ? "text-red-400" : idx === 1 ? "text-amber-400" : "text-zinc-500"}`}>
+                  {idx + 1}
+                </span>
+              )}
+              {cat}
+            </div>
+          ))}
+        </div>
+
+        {/* Mobile: up/down buttons */}
+        <div className="flex flex-col gap-1.5 sm:hidden">
+          {categoryOrder.map((cat, idx) => (
+            <div key={cat} className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <span className={`h-2 w-2 rounded-full ${CAT_DOTS[cat] ?? "bg-zinc-400"}`} />
+              <span className="flex-1 font-mono text-xs text-zinc-700">{cat}</span>
+              {idx < 3 && (
+                <span className={`font-mono text-[9px] font-bold ${idx === 0 ? "text-red-500" : idx === 1 ? "text-amber-500" : "text-zinc-400"}`}>
+                  #{idx + 1}
+                </span>
+              )}
+              <div className="flex gap-0.5">
+                <button
+                  onClick={() => moveCategory(idx, idx - 1)}
+                  disabled={idx === 0}
+                  className="rounded p-1 text-zinc-400 hover:text-zinc-700 disabled:opacity-20"
+                  aria-label="Move up"
+                >
+                  <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                </button>
+                <button
+                  onClick={() => moveCategory(idx, idx + 1)}
+                  disabled={idx === categoryOrder.length - 1}
+                  className="rounded p-1 text-zinc-400 hover:text-zinc-700 disabled:opacity-20"
+                  aria-label="Move down"
+                >
+                  <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3 text-xs text-zinc-400">Demo audit based on URL pattern and product heuristics · No page crawling · No data stored</p>
+      </div>
     </div>
   );
 
@@ -687,9 +837,11 @@ export default function AuditTool() {
 
   // ── Results ───────────────────────────────────────────────────────────────
   if (auditState === "results" && result) {
-    const urgentCount = result.findings.filter((f) => f.priority === "urgent").length;
-    const importantCount = result.findings.filter((f) => f.priority === "important").length;
+    const sortedFindings = sortFindings(result.findings);
+    const urgentCount = sortedFindings.filter((f) => f.priority === "urgent").length;
+    const importantCount = sortedFindings.filter((f) => f.priority === "important").length;
     const fixPrompts = selectedFinding ? buildFixPrompts(selectedFinding, result.detectedBuilder) : null;
+    const topCats = categoryOrder.slice(0, 3);
 
     return (
       <>
@@ -725,13 +877,20 @@ export default function AuditTool() {
             <SummaryCard label="Main product risk" value="Review" sub={result.mainProductRisk} accent="amber" />
           </div>
 
-          {/* Fix prompt hint */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-            <p className="text-xs text-blue-700">
-              <span className="font-semibold">Fix prompts included.</span> Click{" "}
-              <span className="font-mono bg-white/70 px-1.5 py-0.5 rounded border border-blue-200 text-blue-600">Fix prompt →</span>
-              {" "}on any row to get a ready-to-paste prompt for Lovable, Base44, Claude, or any AI builder.
-            </p>
+          {/* Priority note */}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              Prioritised by:
+            </span>
+            {topCats.map((cat, i) => (
+              <span key={cat} className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-2.5 py-0.5 font-mono text-[10px] text-zinc-600">
+                <span className={`h-1.5 w-1.5 rounded-full ${CAT_DOTS[cat] ?? "bg-zinc-400"}`} />
+                <span className={i === 0 ? "font-semibold text-zinc-800" : ""}>{cat}</span>
+              </span>
+            ))}
+            <span className="ml-auto font-mono text-[10px] text-zinc-400">
+              Fix prompt → on any row
+            </span>
           </div>
 
           {/* Findings table */}
@@ -744,7 +903,7 @@ export default function AuditTool() {
             </div>
 
             <div className="divide-y divide-zinc-100">
-              {result.findings.map((f) => {
+              {sortedFindings.map((f) => {
                 const cfg = P_CONFIG[f.priority];
                 return (
                   <div key={f.id} className={`${cfg.rowBg} border-l-4 ${cfg.borderL}`}>

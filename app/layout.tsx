@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/sidebar";
+import { SidebarProvider } from "@/contexts/sidebar-context";
+import LayoutShell from "@/components/layout-shell";
 
 export const metadata: Metadata = {
   title: "Liran Ben Ishay — Product Manager",
@@ -22,20 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="font-sans antialiased h-full">
-        <div className="flex min-h-full bg-zinc-950">
-          {/* Fixed sidebar — lg: always visible, <lg: drawer */}
-          <Sidebar />
-
-          {/* Content area */}
-          <div className="flex flex-1 flex-col overflow-x-hidden bg-white lg:ml-60">
-            {/* Spacer for mobile top bar */}
-            <div className="h-14 shrink-0 lg:hidden" />
-            {/* Page content */}
-            <div className="flex flex-1 flex-col">
-              {children}
-            </div>
-          </div>
-        </div>
+        <SidebarProvider>
+          <LayoutShell>{children}</LayoutShell>
+        </SidebarProvider>
       </body>
     </html>
   );
