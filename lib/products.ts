@@ -52,15 +52,15 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: "ai-product-qa-auditor",
-    title: "AI Product QA Auditor",
-    description: "Audit any product page for UX and QA issues",
+    title: "AI Builder QA Auditor",
+    description: "Audit AI-built sites. Get exact fix prompts.",
     href: "/products/ai-product-qa-auditor",
     status: "beta",
     category: "ai-tool",
     inputType: "url",
-    oneLiner: "Paste a URL. Get a structured product, UX, and QA audit.",
+    oneLiner: "Audit AI-built websites and generate the exact fix prompts to improve them.",
     whyItMatters:
-      "Combines product management, UX judgment, and QA thinking into a single structured output — showing I can evaluate product quality the way a senior PM would.",
+      "Combines product management, UX judgment, QA thinking, and AI tooling literacy — showing I can evaluate product quality and translate it into actionable builder instructions.",
   },
   {
     id: "prd-critic",
