@@ -91,14 +91,14 @@ function SectionCard({
     (typeof value === "string" && !value.trim());
   if (isEmpty) return null;
 
+  // Use a unique key that changes on each flash to restart the CSS animation
+  const flashKey = flashing ? `flash-${config.key}` : config.key;
+
   return (
     <div
+      key={flashKey}
       id={`prd-section-${config.key}`}
-      className={`rounded-xl border bg-zinc-900/70 transition-all duration-500 ${
-        flashing
-          ? "border-green-700/60 shadow-[0_0_12px_0_rgba(34,197,94,0.15)]"
-          : "border-zinc-800"
-      }`}
+      className={`rounded-xl border bg-zinc-900/70 border-zinc-800 ${flashing ? "prd-section-flash" : ""}`}
     >
       {/* Section header */}
       <div className="flex items-center gap-2.5 border-b border-zinc-800 px-4 py-3">
@@ -178,6 +178,36 @@ function SectionCard({
   );
 }
 
+// ── Completeness bar — exported so pm-copilot.tsx can render it sticky ────────
+
+export function PRDCompletenessBar({
+  completeness,
+  className = "",
+}: {
+  completeness: number;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 py-2.5 ${className}`}>
+      <span className="font-mono text-[11px] font-semibold uppercase tracking-widest text-zinc-500 whitespace-nowrap shrink-0">
+        Completeness
+      </span>
+      <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+        <div
+          className="h-full rounded-full bg-zinc-400 transition-all duration-500"
+          style={{ width: `${completeness}%` }}
+        />
+      </div>
+      <span className={`font-mono text-sm font-semibold tabular-nums whitespace-nowrap shrink-0 ${completeness === 100 ? "text-green-400" : "text-zinc-300"}`}>
+        {completeness}%
+      </span>
+      {completeness === 100 && (
+        <span className="font-mono text-[10px] text-green-500 shrink-0">✓</span>
+      )}
+    </div>
+  );
+}
+
 // ── PRD Document ──────────────────────────────────────────────────────────────
 
 export default function PRDDocument({
@@ -188,7 +218,8 @@ export default function PRDDocument({
   onCopy,
   copied,
 }: PRDDocumentProps) {
-  const [expandAll, setExpandAll] = useState(false);
+  // completeness is kept in props for backwards compat but rendered by parent as sticky bar
+  void completeness;
 
   const getSource = (key: keyof PRDEnrichmentData): Source => sources[key] ?? "ai";
 
@@ -223,7 +254,7 @@ export default function PRDDocument({
         >
           Review with PRD Critic →
         </a>
-        <div className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
+        <div className="ml-auto">
           <span className="font-mono text-[10px] text-zinc-600">
             {SECTIONS.filter((s) => {
               const v = prd[s.key];
@@ -231,25 +262,6 @@ export default function PRDDocument({
             }).length} sections
           </span>
         </div>
-      </div>
-
-      {/* Completeness bar */}
-      <div className="mb-5 flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-2.5">
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-widest text-zinc-500 whitespace-nowrap">
-          PRD Completeness
-        </span>
-        <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-zinc-400 transition-all duration-500"
-            style={{ width: `${completeness}%` }}
-          />
-        </div>
-        <span className={`font-mono text-sm font-semibold tabular-nums whitespace-nowrap ${completeness === 100 ? "text-green-400" : "text-zinc-300"}`}>
-          {completeness}%
-        </span>
-        {completeness === 100 && (
-          <span className="font-mono text-[10px] text-green-500">✓ complete</span>
-        )}
       </div>
 
       {/* Document */}

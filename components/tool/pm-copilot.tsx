@@ -9,7 +9,7 @@ import {
   type DynamicEnrichmentCard,
   type PRDEnrichmentData,
 } from "@/lib/pm-enrichment";
-import PRDDocument, { getVisiblePRDKeys } from "@/components/tool/prd-document";
+import PRDDocument, { getVisiblePRDKeys, PRDCompletenessBar } from "@/components/tool/prd-document";
 import { PRDTOCVertical, PRDTOCHorizontal } from "@/components/tool/prd-toc";
 import {
   containsHebrew,
@@ -536,7 +536,8 @@ export default function PMCopilot() {
 
     const flashNum = Date.now();
     setFlashKeys((f) => ({ ...f, [affectedKey]: flashNum }));
-    setTimeout(() => setFlashKeys((f) => ({ ...f, [affectedKey]: 0 })), 1200);
+    // Clear flash after 10 seconds — matches CSS animation duration in globals.css
+    setTimeout(() => setFlashKeys((f) => ({ ...f, [affectedKey]: 0 })), 10000);
     scrollToSection(affectedKey);
 
     setCards((cs) => cs.map((c) => c.id === cardId ? { ...c, answered: true, answer } : c));
@@ -711,23 +712,32 @@ export default function PMCopilot() {
           </button>
         </div>
 
-        {/* Mobile/tablet: horizontal TOC strip */}
-        <div className="mb-4 lg:hidden">
+        {/* Mobile/tablet: horizontal sticky TOC + completeness strip */}
+        <div className="sticky top-0 z-20 -mx-4 px-4 pb-2 pt-1 backdrop-blur-sm bg-white/95 lg:hidden">
+          <PRDCompletenessBar completeness={completeness} className="mb-2" />
           <PRDTOCHorizontal visibleKeys={visibleKeys} />
         </div>
 
-        {/* 3-column workspace:
-            Desktop lg+: [TOC 160px] | [PRD ~55%] | [Enrichment ~44%]
-            Below lg: single column — horizontal TOC above, PRD then enrichment stacked */}
-        <div className="lg:grid lg:gap-5 lg:grid-cols-[160px_1fr_minmax(340px,44%)]">
+        {/* ── 3-column workspace ──────────────────────────────────────────────
+            Desktop lg+:
+              [TOC 148px sticky] | [PRD — fills all remaining space] | [Enrichment 360px sticky]
+            Below lg:
+              horizontal TOC strip above (sticky) → PRD → Enrichment stacked
+            ──────────────────────────────────────────────────────────────────── */}
+        <div className="mt-4 lg:mt-0 lg:grid lg:gap-4 lg:items-start lg:grid-cols-[148px_1fr_360px]">
 
-          {/* Column 1 — Vertical TOC (desktop only) */}
-          <div className="hidden lg:block">
+          {/* Column 1 — Vertical TOC: sticky, desktop only */}
+          <div className="hidden lg:block lg:sticky lg:top-4">
             <PRDTOCVertical visibleKeys={visibleKeys} />
           </div>
 
-          {/* Column 2 — PRD Document */}
+          {/* Column 2 — PRD Document: takes all available width */}
           <div className="min-w-0">
+            {/* Sticky completeness bar — stays visible as user scrolls PRD */}
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm pb-2">
+              <PRDCompletenessBar completeness={completeness} />
+            </div>
+
             <PRDDocument
               prd={prd}
               sources={sources}
@@ -738,8 +748,8 @@ export default function PMCopilot() {
             />
           </div>
 
-          {/* Column 3 — Enrichment panel (prominent, ~44% width) */}
-          <div className="mt-6 lg:mt-0">
+          {/* Column 3 — Enrichment panel: sticky, scrollable if tall */}
+          <div className="mt-6 lg:mt-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50">
               {/* Panel header */}
               <div className="border-b border-zinc-200 px-5 py-4">
