@@ -11,7 +11,7 @@ export default function PMOperatingSystemPage() {
   return (
     <>
       <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-6xl px-5 pb-24 pt-10 sm:px-8 sm:pt-12">
+        <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-10 sm:px-6 sm:pt-12">
 
           {/* Header */}
           <div className="mx-auto max-w-3xl mb-10 border-b border-zinc-100 pb-8 sm:mb-12 sm:pb-10">

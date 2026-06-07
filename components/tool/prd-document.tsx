@@ -44,6 +44,18 @@ interface PRDDocumentProps {
   copied: boolean;
 }
 
+/** Returns the keys of PRD sections that have non-empty content — used by the TOC */
+export function getVisiblePRDKeys(prd: PRDEnrichmentData): string[] {
+  return SECTIONS
+    .filter((s) => {
+      const v = prd[s.key];
+      if (!v) return false;
+      if (Array.isArray(v)) return (v as string[]).filter(Boolean).length > 0;
+      return String(v).trim().length > 0;
+    })
+    .map((s) => s.key);
+}
+
 // ── Source badge ──────────────────────────────────────────────────────────────
 
 function SourceBadge({ source }: { source: Source }) {

@@ -9,7 +9,14 @@ import {
   type DynamicEnrichmentCard,
   type PRDEnrichmentData,
 } from "@/lib/pm-enrichment";
-import PRDDocument from "@/components/tool/prd-document";
+import PRDDocument, { getVisiblePRDKeys } from "@/components/tool/prd-document";
+import { PRDTOCVertical, PRDTOCHorizontal } from "@/components/tool/prd-toc";
+import {
+  containsHebrew,
+  isPredominantlyHebrew,
+  processHebrewInitialInput,
+  processEnrichmentAnswer,
+} from "@/lib/hebrew-support";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -317,7 +324,7 @@ const GEN_STAGES = [
   "Building your draft PRD...",
 ];
 
-// ── Enrichment card view ──────────────────────────────────────────────────────
+// ── Enrichment card view (improved: larger, more prominent, Hebrew-aware) ─────
 
 interface EnrichmentCardViewProps {
   card: DynamicEnrichmentCard;
@@ -330,79 +337,117 @@ function EnrichmentCardView({ card, input, prd, onAnswer }: EnrichmentCardViewPr
   const [draft, setDraft] = useState(card.answer);
   const [focused, setFocused] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
+  const [hebrewNote, setHebrewNote] = useState("");
+
+  function handleDraftChange(value: string) {
+    setDraft(value);
+    if (containsHebrew(value) && value.trim().length > 3) {
+      setHebrewNote("Hebrew detected — English interpretation will be used in the PRD.");
+    } else {
+      setHebrewNote("");
+    }
+  }
 
   function handleAutoFill() {
     setAutoFilling(true);
     setTimeout(() => {
       const suggestion = generateAutoFill(card, input, prd);
       setDraft(suggestion);
+      setHebrewNote(""); // Auto-fill is always English
       setAutoFilling(false);
-    }, 300);
+    }, 350);
   }
 
+  function handleApply() {
+    if (!draft.trim()) return;
+    const { processedAnswer, wasHebrew, userNote } = processEnrichmentAnswer(draft.trim(), card.id);
+    if (wasHebrew && userNote) setHebrewNote(userNote);
+    onAnswer(card.id, processedAnswer);
+  }
+
+  // ── Answered state
   if (card.answered) {
     return (
-      <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+      <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-green-600 text-xs">✓</span>
-            <p className="text-xs font-semibold text-green-800">{card.title}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-green-500">{card.icon}</span>
+            <p className="text-sm font-semibold text-green-800">{card.title}</p>
           </div>
-          <span className="font-mono text-[9px] text-green-500 shrink-0">applied</span>
+          <span className="font-mono text-[10px] font-semibold text-green-500 shrink-0">✓ Applied</span>
         </div>
+        <p className="mt-1.5 text-xs text-green-700 line-clamp-2 leading-relaxed">{card.answer}</p>
       </div>
     );
   }
 
+  // ── Unanswered state — larger, more prominent
   return (
-    <div className={`rounded-lg border bg-white p-3 transition-colors ${focused ? "border-zinc-400" : "border-zinc-200"}`}>
-      {/* Header */}
-      <div className="mb-2 flex items-center gap-1.5">
-        <span className="text-sm leading-none">{card.icon}</span>
-        <p className="text-xs font-semibold text-zinc-900">{card.title}</p>
+    <div
+      className={`rounded-xl border bg-white transition-all ${
+        focused ? "border-zinc-400 shadow-sm" : "border-zinc-200"
+      }`}
+    >
+      {/* Card header — area name + icon */}
+      <div className="flex items-center gap-2.5 border-b border-zinc-100 px-4 py-3">
+        <span className="text-lg leading-none">{card.icon}</span>
+        <div>
+          <p className="text-sm font-semibold text-zinc-900">{card.title}</p>
+          <p className="mt-0.5 text-xs leading-snug text-zinc-400">{card.explanation}</p>
+        </div>
       </div>
 
-      {/* One-sentence explanation */}
-      <p className="mb-1.5 text-xs leading-snug text-zinc-500">{card.explanation}</p>
-
-      {/* Question */}
-      <p className="mb-2 text-xs font-medium leading-snug text-zinc-700">{card.question}</p>
-
-      {/* Hint */}
-      {card.hint && (
-        <p className="mb-2 rounded-md bg-zinc-50 px-2.5 py-1.5 font-mono text-[10px] text-zinc-500 border border-zinc-100">
-          💡 {card.hint}
+      {/* Question — visually prominent */}
+      <div className="px-4 pt-4 pb-3">
+        <p className="text-sm font-semibold leading-snug text-zinc-800">
+          {card.question}
         </p>
-      )}
 
-      {/* Input */}
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder={card.placeholder}
-        rows={2}
-        className="w-full resize-none rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-800"
-      />
+        {/* Hint */}
+        {card.hint && (
+          <p className="mt-2 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+            💡 {card.hint}
+          </p>
+        )}
+
+        {/* Input */}
+        <textarea
+          value={draft}
+          onChange={(e) => handleDraftChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder={card.placeholder}
+          rows={3}
+          dir={containsHebrew(draft) ? "rtl" : "ltr"}
+          className="mt-3 w-full resize-y rounded-lg border border-zinc-200 px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-800 focus:ring-offset-1"
+        />
+
+        {/* Hebrew indicator */}
+        {hebrewNote && (
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-600">
+            <span>🌐</span>
+            <span>{hebrewNote}</span>
+          </p>
+        )}
+      </div>
 
       {/* Actions */}
-      <div className="mt-2 flex gap-2">
+      <div className="flex gap-2 border-t border-zinc-100 px-4 py-3">
         <button
           onClick={handleAutoFill}
           disabled={autoFilling}
-          className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-zinc-200 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700 disabled:opacity-50"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 py-2 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700 disabled:opacity-50"
         >
           {autoFilling ? (
-            <><span className="animate-spin">⟳</span> Suggesting...</>
+            <><span className="animate-spin inline-block">⟳</span> Suggesting...</>
           ) : (
             <>⚡ Auto-fill suggestion</>
           )}
         </button>
         <button
-          onClick={() => { if (draft.trim()) onAnswer(card.id, draft.trim()); }}
+          onClick={handleApply}
           disabled={!draft.trim()}
-          className="inline-flex flex-1 items-center justify-center rounded-md bg-zinc-900 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex flex-1 items-center justify-center rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Apply to PRD ↑
         </button>
@@ -541,7 +586,9 @@ export default function PMCopilot() {
   }
 
   // ── Input ────────────────────────────────────────────────────────────────
-  if (copilotState === "input") return (
+  if (copilotState === "input") {
+    const inputIsHebrew = containsHebrew(inputText);
+    return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-8 text-center">
         <p className="mb-3 font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">
@@ -554,6 +601,9 @@ export default function PMCopilot() {
           Describe the problem in plain language. Clearspec detects the domain, expands your idea,
           and generates a complete draft PRD with context-specific enrichment questions.
         </p>
+        <p className="mt-2 text-xs text-zinc-400">
+          🌐 You can write in Hebrew — the PRD will be generated in English.
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -564,9 +614,16 @@ export default function PMCopilot() {
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) generate(); }}
             placeholder="e.g. Partners struggle to create pricing packages — there are too many options with no guidance"
             rows={4}
+            dir={inputIsHebrew ? "rtl" : "ltr"}
             className={`w-full resize-none rounded-xl border px-5 py-4 text-sm text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 transition-colors ${inputError ? "border-red-300 bg-red-50" : "border-zinc-200 bg-white hover:border-zinc-300"}`}
             autoFocus
           />
+          {inputIsHebrew && (
+            <p className="mt-1.5 text-xs text-amber-600 flex items-center gap-1.5">
+              <span>🌐</span>
+              <span>Hebrew input detected — PRD will be generated in English.</span>
+            </p>
+          )}
           {inputError && <p className="mt-2 text-xs text-red-600">{inputError}</p>}
         </div>
 
@@ -593,7 +650,8 @@ export default function PMCopilot() {
         </div>
       </div>
     </div>
-  );
+    );
+  }
 
   // ── Generating ───────────────────────────────────────────────────────────
   if (copilotState === "generating") return (
@@ -628,11 +686,12 @@ export default function PMCopilot() {
   if (copilotState === "draft" && prd) {
     const unansweredCards = cards.filter((c) => !c.answered);
     const answeredCards = cards.filter((c) => c.answered);
+    const visibleKeys = getVisiblePRDKeys(prd);
 
     return (
       <div ref={draftRef}>
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <div className="h-2 w-2 rounded-full bg-green-500" />
@@ -644,7 +703,7 @@ export default function PMCopilot() {
             <p className="mt-1 text-sm text-zinc-500">
               {answeredCount > 0
                 ? `${answeredCount} of ${cards.length} enrichments applied — PRD strengthened`
-                : `${cards.length} context-specific enrichment prompts ready`}
+                : `${cards.length} context-specific questions ready on the right`}
             </p>
           </div>
           <button onClick={restart} className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400">
@@ -652,11 +711,23 @@ export default function PMCopilot() {
           </button>
         </div>
 
-        {/* Split layout */}
-        <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+        {/* Mobile/tablet: horizontal TOC strip */}
+        <div className="mb-4 lg:hidden">
+          <PRDTOCHorizontal visibleKeys={visibleKeys} />
+        </div>
 
-          {/* Left: PRD Document */}
-          <div>
+        {/* 3-column workspace:
+            Desktop lg+: [TOC 160px] | [PRD ~55%] | [Enrichment ~44%]
+            Below lg: single column — horizontal TOC above, PRD then enrichment stacked */}
+        <div className="lg:grid lg:gap-5 lg:grid-cols-[160px_1fr_minmax(340px,44%)]">
+
+          {/* Column 1 — Vertical TOC (desktop only) */}
+          <div className="hidden lg:block">
+            <PRDTOCVertical visibleKeys={visibleKeys} />
+          </div>
+
+          {/* Column 2 — PRD Document */}
+          <div className="min-w-0">
             <PRDDocument
               prd={prd}
               sources={sources}
@@ -667,19 +738,39 @@ export default function PMCopilot() {
             />
           </div>
 
-          {/* Right: Enrichment panel */}
-          <div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-              <div className="mb-4">
-                <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">
-                  Enrich Your PRD
-                </p>
-                <p className="text-xs text-zinc-500">
-                  Questions generated from your input context. Each answer strengthens a specific PRD section live.
-                </p>
+          {/* Column 3 — Enrichment panel (prominent, ~44% width) */}
+          <div className="mt-6 lg:mt-0">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50">
+              {/* Panel header */}
+              <div className="border-b border-zinc-200 px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                      Enrich Your PRD
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      Context-specific questions · Each answer updates the PRD live
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono text-xs font-semibold text-zinc-700">
+                      {answeredCount}/{cards.length}
+                    </span>
+                    <p className="text-[10px] text-zinc-400">done</p>
+                  </div>
+                </div>
+
+                {/* Mini progress */}
+                <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-zinc-200">
+                  <div
+                    className="h-full rounded-full bg-zinc-800 transition-all duration-500"
+                    style={{ width: cards.length > 0 ? `${(answeredCount / cards.length) * 100}%` : "0%" }}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-3">
+              {/* Cards */}
+              <div className="space-y-4 p-5">
                 {unansweredCards.map((card) => (
                   <EnrichmentCardView key={card.id} card={card} input={inputText} prd={prd} onAnswer={handleAnswer} />
                 ))}
@@ -689,9 +780,11 @@ export default function PMCopilot() {
               </div>
 
               {answeredCount === cards.length && cards.length > 0 && (
-                <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-center">
-                  <p className="text-sm font-semibold text-green-800">All enrichments applied</p>
-                  <p className="mt-1 text-xs text-green-600">Copy the PRD and continue in your spec tool.</p>
+                <div className="border-t border-zinc-200 p-5">
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-center">
+                    <p className="text-sm font-semibold text-green-800">All enrichments applied</p>
+                    <p className="mt-1 text-xs text-green-600">Copy the PRD and continue in your spec tool.</p>
+                  </div>
                 </div>
               )}
             </div>
