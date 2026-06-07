@@ -10,7 +10,7 @@ import {
   type PRDEnrichmentData,
 } from "@/lib/pm-enrichment";
 import PRDDocument, { getVisiblePRDKeys, PRDCompletenessBar } from "@/components/tool/prd-document";
-import { PRDTOCVertical, PRDTOCHorizontal } from "@/components/tool/prd-toc";
+import { PRDTOCVertical, PRDTOCHorizontal, scrollPRDToSection, type SectionState } from "@/components/tool/prd-toc";
 import {
   containsHebrew,
   isPredominantlyHebrew,
@@ -490,9 +490,20 @@ export default function PMCopilot() {
   ];
 
   function scrollToSection(key: PRDKey) {
-    setTimeout(() => {
-      document.getElementById(`prd-section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }, 80);
+    // Use container-aware scroll so the PRD scroll column scrolls, not the page
+    setTimeout(() => scrollPRDToSection(key, "prd-scroll-container"), 80);
+  }
+
+  // Compute section states for the TOC completion indicators
+  function getSectionStates(): Partial<Record<string, SectionState>> {
+    const result: Partial<Record<string, SectionState>> = {};
+    if (!prd) return result;
+    const visKeys = getVisiblePRDKeys(prd);
+    visKeys.forEach((key) => {
+      const src = sources[key as PRDKey];
+      result[key] = src === "user" ? "confirmed" : "ai";
+    });
+    return result;
   }
 
   async function generate() {
@@ -683,103 +694,129 @@ export default function PMCopilot() {
     </div>
   );
 
-  // ── Draft ────────────────────────────────────────────────────────────────
+  // ── Draft — application-level workspace layout ──────────────────────────
   if (copilotState === "draft" && prd) {
     const unansweredCards = cards.filter((c) => !c.answered);
     const answeredCards = cards.filter((c) => c.answered);
     const visibleKeys = getVisiblePRDKeys(prd);
+    const sectionStates = getSectionStates();
+    const CONTAINER_ID = "prd-scroll-container";
 
     return (
-      <div ref={draftRef}>
-        {/* Header */}
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="h-2 w-2 rounded-full bg-green-500" />
-              <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                Draft PRD generated
-              </p>
+      // Full-height workspace — fills remaining height from layout shell
+      // The PRD column (#prd-scroll-container) scrolls internally.
+      // TOC and Enrichment columns are full-height and NEVER scroll with PRD.
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+
+        {/* ── TOP BAR — always visible, fixed height ── */}
+        <div className="flex shrink-0 items-center gap-3 border-b border-zinc-200 bg-white px-4 py-2.5">
+          {/* Title + status */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
+              <h2 className="truncate text-sm font-semibold text-zinc-900">{prd.productTitle}</h2>
             </div>
-            <h2 className="text-xl font-semibold tracking-tight text-zinc-900">{prd.productTitle}</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-400">
               {answeredCount > 0
-                ? `${answeredCount} of ${cards.length} enrichments applied — PRD strengthened`
-                : `${cards.length} context-specific questions ready on the right`}
+                ? `${answeredCount}/${cards.length} enrichments applied`
+                : `${cards.length} enrichment questions ready`}
             </p>
           </div>
-          <button onClick={restart} className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400">
+
+          {/* Completeness bar — always visible */}
+          <div className="hidden sm:flex items-center gap-2.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 shrink-0">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500 whitespace-nowrap">
+              Complete
+            </span>
+            <div className="w-28 h-1.5 overflow-hidden rounded-full bg-zinc-200">
+              <div
+                className="h-full rounded-full bg-zinc-800 transition-all duration-500"
+                style={{ width: `${completeness}%` }}
+              />
+            </div>
+            <span className={`font-mono text-sm font-semibold tabular-nums whitespace-nowrap ${completeness === 100 ? "text-green-600" : "text-zinc-700"}`}>
+              {completeness}%
+            </span>
+            <span className="font-mono text-[10px] text-zinc-400 whitespace-nowrap hidden lg:inline">
+              {visibleKeys.length} sections
+            </span>
+          </div>
+
+          {/* Start over */}
+          <button
+            onClick={restart}
+            className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-800"
+          >
             Start over
           </button>
         </div>
 
-        {/* Mobile/tablet: horizontal sticky TOC + completeness strip */}
-        <div className="sticky top-0 z-20 -mx-4 px-4 pb-2 pt-1 backdrop-blur-sm bg-white/95 lg:hidden">
-          <PRDCompletenessBar completeness={completeness} className="mb-2" />
+        {/* ── MOBILE completeness (below top bar, sm only) ── */}
+        <div className="sm:hidden shrink-0 border-b border-zinc-100 bg-white px-4 py-2">
+          <PRDCompletenessBar completeness={completeness} />
+        </div>
+
+        {/* ── MOBILE horizontal TOC ── */}
+        <div className="shrink-0 lg:hidden">
           <PRDTOCHorizontal visibleKeys={visibleKeys} />
         </div>
 
-        {/* ── 3-column workspace ──────────────────────────────────────────────
-            Desktop lg+:
-              [TOC 148px sticky] | [PRD — fills all remaining space] | [Enrichment 360px sticky]
-            Below lg:
-              horizontal TOC strip above (sticky) → PRD → Enrichment stacked
-            ──────────────────────────────────────────────────────────────────── */}
-        <div className="mt-4 lg:mt-0 lg:grid lg:gap-4 lg:items-start lg:grid-cols-[148px_1fr_360px]">
+        {/* ── MAIN WORKSPACE ROW — fills all remaining height ── */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
 
-          {/* Column 1 — Vertical TOC: sticky, desktop only */}
-          <div className="hidden lg:block lg:sticky lg:top-4">
-            <PRDTOCVertical visibleKeys={visibleKeys} />
-          </div>
-
-          {/* Column 2 — PRD Document: takes all available width */}
-          <div className="min-w-0">
-            {/* Sticky completeness bar — stays visible as user scrolls PRD */}
-            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm pb-2">
-              <PRDCompletenessBar completeness={completeness} />
-            </div>
-
-            <PRDDocument
-              prd={prd}
-              sources={sources}
-              flashKeys={flashKeys}
-              completeness={completeness}
-              onCopy={handleCopy}
-              copied={copied}
+          {/* Column 1: TOC — desktop only, full height, never scrolls with PRD */}
+          <div className="hidden lg:flex lg:w-52 shrink-0 flex-col border-r border-zinc-100 bg-zinc-950 overflow-y-auto">
+            <PRDTOCVertical
+              visibleKeys={visibleKeys}
+              sectionStates={sectionStates}
+              containerId={CONTAINER_ID}
             />
           </div>
 
-          {/* Column 3 — Enrichment panel: sticky, scrollable if tall */}
-          <div className="mt-6 lg:mt-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50">
-              {/* Panel header */}
-              <div className="border-b border-zinc-200 px-5 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                      Enrich Your PRD
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-400">
-                      Context-specific questions · Each answer updates the PRD live
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono text-xs font-semibold text-zinc-700">
-                      {answeredCount}/{cards.length}
-                    </span>
-                    <p className="text-[10px] text-zinc-400">done</p>
-                  </div>
-                </div>
+          {/* Column 2: PRD — the ONLY column that scrolls */}
+          <div
+            id={CONTAINER_ID}
+            className="flex-1 min-w-0 overflow-y-auto bg-white"
+          >
+            <div className="px-5 py-5 lg:px-8 lg:py-6">
+              <PRDDocument
+                prd={prd}
+                sources={sources}
+                flashKeys={flashKeys}
+                completeness={completeness}
+                onCopy={handleCopy}
+                copied={copied}
+              />
+            </div>
+          </div>
 
-                {/* Mini progress */}
-                <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-zinc-200">
-                  <div
-                    className="h-full rounded-full bg-zinc-800 transition-all duration-500"
-                    style={{ width: cards.length > 0 ? `${(answeredCount / cards.length) * 100}%` : "0%" }}
-                  />
+          {/* Column 3: AI Copilot / Enrichment — full height, never scrolls with PRD */}
+          <div className="hidden lg:flex lg:w-[380px] xl:w-[420px] shrink-0 flex-col border-l border-zinc-200 bg-zinc-50">
+
+            {/* Panel header — fixed within the column */}
+            <div className="shrink-0 border-b border-zinc-200 bg-white px-5 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-sm text-zinc-900">AI Copilot</p>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    Enrich your PRD · answers update sections live
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-sm font-bold text-zinc-700">{answeredCount}/{cards.length}</span>
+                  <p className="font-mono text-[10px] text-zinc-400">done</p>
                 </div>
               </div>
+              <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-zinc-200">
+                <div
+                  className="h-full rounded-full bg-zinc-800 transition-all duration-500"
+                  style={{ width: cards.length > 0 ? `${(answeredCount / cards.length) * 100}%` : "0%" }}
+                />
+              </div>
+            </div>
 
-              {/* Cards */}
+            {/* Cards — scrollable within the column */}
+            <div className="flex-1 overflow-y-auto">
               <div className="space-y-4 p-5">
                 {unansweredCards.map((card) => (
                   <EnrichmentCardView key={card.id} card={card} input={inputText} prd={prd} onAnswer={handleAnswer} />
@@ -787,23 +824,37 @@ export default function PMCopilot() {
                 {answeredCards.map((card) => (
                   <EnrichmentCardView key={card.id} card={card} input={inputText} prd={prd} onAnswer={handleAnswer} />
                 ))}
-              </div>
-
-              {answeredCount === cards.length && cards.length > 0 && (
-                <div className="border-t border-zinc-200 p-5">
+                {answeredCount === cards.length && cards.length > 0 && (
                   <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-center">
                     <p className="text-sm font-semibold text-green-800">All enrichments applied</p>
                     <p className="mt-1 text-xs text-green-600">Copy the PRD and continue in your spec tool.</p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
+
           </div>
 
         </div>
 
-        <p className="mt-4 text-center text-xs text-zinc-400">
-          Clearspec does not save your work. Copy the PRD before leaving this page.
+        {/* Mobile: enrichment stacks below PRD */}
+        <div className="lg:hidden shrink-0 border-t border-zinc-200 bg-zinc-50">
+          <div className="border-b border-zinc-200 bg-white px-5 py-3 flex items-center justify-between">
+            <p className="font-semibold text-sm text-zinc-900">AI Copilot — Enrich Your PRD</p>
+            <span className="font-mono text-xs text-zinc-500">{answeredCount}/{cards.length} done</span>
+          </div>
+          <div className="space-y-3 p-4 max-h-64 overflow-y-auto">
+            {unansweredCards.map((card) => (
+              <EnrichmentCardView key={card.id} card={card} input={inputText} prd={prd} onAnswer={handleAnswer} />
+            ))}
+            {answeredCards.map((card) => (
+              <EnrichmentCardView key={card.id} card={card} input={inputText} prd={prd} onAnswer={handleAnswer} />
+            ))}
+          </div>
+        </div>
+
+        <p className="shrink-0 bg-white py-1.5 text-center font-mono text-[10px] text-zinc-400 border-t border-zinc-100">
+          Clearspec does not save your work — copy the PRD before leaving
         </p>
       </div>
     );

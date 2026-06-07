@@ -7,19 +7,22 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   const { collapsed } = useSidebar();
 
   return (
-    <div className="flex min-h-full bg-zinc-950">
+    <div className="flex h-full bg-zinc-950">
       <Sidebar />
-      {/* Content area — margin matches sidebar width, transitions smoothly */}
+      {/* Content area */}
       <div
         className={`
-          flex flex-1 flex-col overflow-x-hidden bg-white
+          flex flex-1 flex-col bg-white
           transition-[margin] duration-200 ease-in-out
           ${collapsed ? "lg:ml-14" : "lg:ml-60"}
         `}
+        style={{ minHeight: 0 }}
       >
         {/* Mobile top-bar spacer */}
         <div className="h-14 shrink-0 lg:hidden" />
-        <div className="flex flex-1 flex-col">{children}</div>
+        {/* min-h-0 allows flex children to shrink below content height,
+            enabling application-level layouts with internal scroll */}
+        <div className="flex flex-1 flex-col min-h-0">{children}</div>
       </div>
     </div>
   );
