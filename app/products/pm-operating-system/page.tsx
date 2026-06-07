@@ -7,12 +7,12 @@ export const metadata = {
 };
 
 export default function PMOperatingSystemPage() {
-  // PMCopilot manages its own layout:
-  //   - Input/Generating states: centered, padded, normal page scroll
-  //   - Draft state: full-height application workspace, internal scroll
   return (
-    <main className="flex flex-col flex-1 min-h-0">
+    // bg-white base; PMCopilot controls layout in each state.
+    // Draft state uses lg:h-screen (viewport units) for the workspace —
+    // it does not depend on parent height, so no special wrapping needed here.
+    <div className="bg-white">
       <PMCopilot />
-    </main>
+    </div>
   );
 }

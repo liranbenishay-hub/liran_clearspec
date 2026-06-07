@@ -703,10 +703,16 @@ export default function PMCopilot() {
     const CONTAINER_ID = "prd-scroll-container";
 
     return (
-      // Full-height workspace — fills remaining height from layout shell
-      // The PRD column (#prd-scroll-container) scrolls internally.
-      // TOC and Enrichment columns are full-height and NEVER scroll with PRD.
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      // ── APPLICATION WORKSPACE ──────────────────────────────────────────
+      // On desktop (lg+): h-screen = 100vh, uses viewport units directly.
+      // This is independent of parent chain so it ALWAYS works regardless
+      // of whether parents have h-full, min-h-full, or overflow-x-hidden.
+      //
+      // On mobile (< lg): height is auto, body scrolls normally.
+      //
+      // The PRD column (#prd-scroll-container) is the ONLY scrollable element.
+      // TOC and Enrichment columns sit at full height — never scroll with PRD.
+      <div className="flex flex-col overflow-hidden lg:h-screen">
 
         {/* ── TOP BAR — always visible, fixed height ── */}
         <div className="flex shrink-0 items-center gap-3 border-b border-zinc-200 bg-white px-4 py-2.5">
@@ -761,8 +767,10 @@ export default function PMCopilot() {
           <PRDTOCHorizontal visibleKeys={visibleKeys} />
         </div>
 
-        {/* ── MAIN WORKSPACE ROW — fills all remaining height ── */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* ── MAIN WORKSPACE ROW ── */}
+        {/* Desktop: flex-1 fills the remaining height inside the lg:h-screen container */}
+        {/* min-h-0 prevents flex children from overflowing their bounds */}
+        <div className="hidden lg:flex flex-1 min-h-0 overflow-hidden">
 
           {/* Column 1: TOC — desktop only, full height, never scrolls with PRD */}
           <div className="hidden lg:flex lg:w-52 shrink-0 flex-col border-r border-zinc-100 bg-zinc-950 overflow-y-auto">
@@ -837,8 +845,20 @@ export default function PMCopilot() {
 
         </div>
 
+        {/* Mobile: PRD visible + enrichment below (body scrolls normally) */}
+        <div className="lg:hidden px-4 py-4 bg-white">
+          <PRDDocument
+            prd={prd}
+            sources={sources}
+            flashKeys={flashKeys}
+            completeness={completeness}
+            onCopy={handleCopy}
+            copied={copied}
+          />
+        </div>
+
         {/* Mobile: enrichment stacks below PRD */}
-        <div className="lg:hidden shrink-0 border-t border-zinc-200 bg-zinc-50">
+        <div className="lg:hidden border-t border-zinc-200 bg-zinc-50">
           <div className="border-b border-zinc-200 bg-white px-5 py-3 flex items-center justify-between">
             <p className="font-semibold text-sm text-zinc-900">AI Copilot — Enrich Your PRD</p>
             <span className="font-mono text-xs text-zinc-500">{answeredCount}/{cards.length} done</span>
@@ -853,7 +873,7 @@ export default function PMCopilot() {
           </div>
         </div>
 
-        <p className="shrink-0 bg-white py-1.5 text-center font-mono text-[10px] text-zinc-400 border-t border-zinc-100">
+        <p className="bg-white py-1.5 text-center font-mono text-[10px] text-zinc-400 border-t border-zinc-100 shrink-0">
           Clearspec does not save your work — copy the PRD before leaving
         </p>
       </div>

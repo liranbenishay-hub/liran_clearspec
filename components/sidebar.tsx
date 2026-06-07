@@ -88,7 +88,6 @@ export default function Sidebar() {
           fixed inset-y-0 left-0 z-50 flex flex-col
           bg-zinc-950 border-r border-zinc-800/60
           transition-all duration-200 ease-in-out
-          lg:sticky lg:top-0 lg:h-screen
           ${mobileOpen ? "translate-x-0 w-60" : "-translate-x-full w-60"}
           lg:translate-x-0
           ${collapsed ? "lg:w-14" : "lg:w-60"}
