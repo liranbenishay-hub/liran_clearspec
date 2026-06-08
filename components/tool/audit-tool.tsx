@@ -53,10 +53,10 @@ const TOOL_LABELS: Record<ToolId, string> = {
 };
 
 const LOADING_STAGES = [
-  "Resolving domain...",
-  "Classifying site type...",
-  "Applying UX heuristics...",
-  "Generating fix prompts...",
+  "Connecting to target site...",
+  "Fetching and parsing HTML...",
+  "Analysing signals and structure...",
+  "Generating audit findings...",
 ];
 
 // ── Fix prompt generator ──────────────────────────────────────────────────────
@@ -552,6 +552,320 @@ function buildAuditResult(url: string): AuditResult {
   };
 }
 
+// ── API response type (mirrors /api/audit response) ──────────────────────────
+
+interface APIAuditData {
+  url: string;
+  fetchedAt: string;
+  fetchDuration: number;
+  pageSize: number;
+  statusCode: number;
+  title: string;
+  description: string;
+  h1Tags: string[];
+  h2Tags: string[];
+  wordCount: number;
+  links: { total: number; internal: number; external: number; samples: string[] };
+  buttons: { total: number; samples: string[] };
+  forms: { total: number; inputs: number };
+  images: { total: number; missingAlt: number; withAlt: number; missingAltSamples: string[] };
+  ctaElements: string[];
+  signals: {
+    hasPricing: boolean; pricingIndicators: string[];
+    hasSignup: boolean; signupIndicators: string[];
+    hasContact: boolean; contactIndicators: string[];
+    hasNewsletter: boolean; hasSearch: boolean;
+    hasChatWidget: boolean; hasCookieBanner: boolean;
+    hasMobileViewport: boolean; hasCanonical: boolean;
+    hasOgTags: boolean; hasSchemaMarkup: boolean;
+  };
+  scripts: number;
+  stylesheets: number;
+}
+
+// ── Rule-based findings engine — driven by real API data ─────────────────────
+
+function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFinding[] {
+  _idCounter = 0;
+  const findings: AuditFinding[] = [];
+  const urlLower = url.toLowerCase();
+
+  // ── Product clarity ────────────────────────────────────────────────────────
+  if (!data.title) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Product clarity",
+      issue: "Page has no title tag",
+      whyItMatters: "A missing title is a critical SEO and product clarity failure. Search engines will auto-generate a title, which is almost always wrong. First impressions on search results and social shares are broken.",
+      suggestedFix: "Add a descriptive <title> tag that names the product, communicates the core value proposition, and is between 50–60 characters.",
+      effort: "Low", impact: "High",
+    });
+  } else if (data.title.length < 20) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Product clarity",
+      issue: `Title tag is too short: "${data.title}"`,
+      whyItMatters: "A very short title does not communicate the product's value or context. Users scanning search results or browser tabs cannot understand what the product does.",
+      suggestedFix: `Expand the title to describe the product clearly. e.g. "${data.title} — [what it does] for [who]"`,
+      effort: "Low", impact: "High",
+    });
+  } else if (data.title.length > 70) {
+    findings.push({
+      id: fid(), priority: "later", category: "Product clarity",
+      issue: "Title tag may be truncated in search results",
+      whyItMatters: "Google truncates titles longer than ~60 characters in search results. The most important part of the value proposition may be cut off.",
+      suggestedFix: "Trim the title to under 60 characters. Front-load the product name and primary value prop.",
+      effort: "Low", impact: "Low",
+    });
+  }
+
+  if (!data.description) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Product clarity",
+      issue: "No meta description found",
+      whyItMatters: "Without a meta description, search engines generate their own preview text — usually poorly. This is a missed opportunity to control first impressions and drive qualified clicks.",
+      suggestedFix: "Add a <meta name='description'> tag with 120–155 characters. Lead with the user outcome, not the product feature.",
+      effort: "Low", impact: "High",
+    });
+  } else if (data.description.length < 50) {
+    findings.push({
+      id: fid(), priority: "important", category: "Product clarity",
+      issue: "Meta description is too short to communicate value",
+      whyItMatters: "A meta description under 50 characters does not give enough context to convince a user to click from search results.",
+      suggestedFix: "Expand the description to 120–155 characters. Describe what the product does, who it's for, and what the user gets.",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  if (data.h1Tags.length === 0) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Product clarity",
+      issue: "No H1 heading found on the page",
+      whyItMatters: "The H1 is the primary statement of what this page is about. Its absence signals to both users and search engines that the page lacks a clear purpose.",
+      suggestedFix: "Add a single, prominent H1 that names the product and communicates the core user outcome. It should be the first major text a user reads.",
+      effort: "Low", impact: "High",
+    });
+  } else if (data.h1Tags.length > 3) {
+    findings.push({
+      id: fid(), priority: "important", category: "Product clarity",
+      issue: `${data.h1Tags.length} H1 tags found — only one should exist`,
+      whyItMatters: "Multiple H1 tags dilute the primary message and create SEO confusion. Each page should have one dominant H1 that states the page's purpose.",
+      suggestedFix: `Reduce to a single H1 that states the core value proposition. Convert the others to H2 or H3.`,
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  if (data.wordCount < 80) {
+    findings.push({
+      id: fid(), priority: "important", category: "Content quality",
+      issue: "Very little readable content detected",
+      whyItMatters: "Pages with minimal text are difficult for search engines to understand and may appear thin to users. The product's value proposition and proof cannot be communicated without content.",
+      suggestedFix: "Add substantive content: what the product does, who it helps, and what problem it solves. Aim for at least 300 words of meaningful content.",
+      effort: "Medium", impact: "High",
+    });
+  }
+
+  // ── Conversion ────────────────────────────────────────────────────────────
+  if (data.ctaElements.length === 0 && data.buttons.total === 0) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Conversion",
+      issue: "No call-to-action elements detected",
+      whyItMatters: "A page without a clear CTA cannot convert visitors. Users arrive with intent and have no path forward — leading to immediate drop-off.",
+      suggestedFix: "Add a prominent primary CTA above the fold with action-oriented copy that describes the next step. e.g. 'Start free', 'Get access', 'Book a demo'.",
+      effort: "Low", impact: "High",
+    });
+  } else if (data.ctaElements.length === 0 && data.buttons.total < 3) {
+    findings.push({
+      id: fid(), priority: "important", category: "Conversion",
+      issue: "CTA copy is generic — no outcome-based action text detected",
+      whyItMatters: "Buttons exist but none use outcome-oriented language. Generic CTAs like 'Submit' or 'Click here' convert significantly worse than outcome-based CTAs.",
+      suggestedFix: "Replace generic button text with outcome-based copy. e.g. 'Get started free', 'See how it works', 'Book your demo'. The user should know what happens next.",
+      effort: "Low", impact: "High",
+    });
+  }
+
+  if (!data.signals.hasPricing) {
+    findings.push({
+      id: fid(), priority: "important", category: "Conversion",
+      issue: "No pricing information visible on this page",
+      whyItMatters: "B2B and SaaS buyers need pricing information to self-qualify. Hiding pricing forces a sales call, gating out up to 60% of buyers who prefer to self-evaluate.",
+      suggestedFix: "Add a pricing page or pricing summary. If pricing is complex, add a starting price or a range. At minimum, indicate that pricing is available on request.",
+      effort: "Medium", impact: "High",
+    });
+  }
+
+  if (!data.signals.hasSignup) {
+    findings.push({
+      id: fid(), priority: "important", category: "Conversion",
+      issue: "No sign-up or account creation path detected",
+      whyItMatters: "Visitors who are ready to try the product have no self-service path to do so. This forces contact with sales or support, adding friction and reducing conversion.",
+      suggestedFix: "Add a self-service sign-up flow. Even a waitlist or early access form is better than no path at all. Gate it after showing product value, not before.",
+      effort: "Medium", impact: "High",
+    });
+  }
+
+  // ── Trust signals ─────────────────────────────────────────────────────────
+  if (!data.signals.hasContact) {
+    findings.push({
+      id: fid(), priority: "important", category: "Trust signals",
+      issue: "No contact information visible",
+      whyItMatters: "B2B buyers and enterprise evaluators look for contact information as a trust signal. Its absence creates doubt about whether the company is reachable or legitimate.",
+      suggestedFix: "Add a contact link, support email, or contact form. At minimum, include a footer with a way to reach the team.",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  if (!data.signals.hasOgTags) {
+    findings.push({
+      id: fid(), priority: "later", category: "Trust signals",
+      issue: "No Open Graph tags found — social sharing will look broken",
+      whyItMatters: "When this page is shared on LinkedIn, Slack, or Twitter, it will show a plain URL with no image or description. This reduces click-through on shared links.",
+      suggestedFix: "Add og:title, og:description, and og:image meta tags. This takes 15 minutes and significantly improves social share appearance.",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  // ── Accessibility ─────────────────────────────────────────────────────────
+  if (data.images.missingAlt > 5) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Accessibility",
+      issue: `${data.images.missingAlt} of ${data.images.total} images are missing alt text`,
+      whyItMatters: "Images without alt text are invisible to screen readers and fail WCAG AA accessibility standards. This also reduces SEO value of images.",
+      suggestedFix: `Add descriptive alt text to all ${data.images.missingAlt} images. For decorative images, use alt="". For content images, describe what the image shows in 10 words or fewer.`,
+      effort: "Medium", impact: "Medium",
+    });
+  } else if (data.images.missingAlt > 0) {
+    findings.push({
+      id: fid(), priority: "important", category: "Accessibility",
+      issue: `${data.images.missingAlt} image${data.images.missingAlt > 1 ? "s" : ""} missing alt text`,
+      whyItMatters: "Images without alt text fail accessibility guidelines and lose SEO value. Screen reader users cannot understand what these images communicate.",
+      suggestedFix: "Add descriptive alt text to each image. Check the images at: " + data.images.missingAltSamples.slice(0, 2).join(", "),
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  // ── Mobile responsiveness ─────────────────────────────────────────────────
+  if (!data.signals.hasMobileViewport) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Mobile responsiveness",
+      issue: "No mobile viewport meta tag found",
+      whyItMatters: "Without a viewport meta tag, the page will render as a desktop-scaled layout on mobile devices — making text tiny and navigation unusable.",
+      suggestedFix: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to the page <head>. This is the single most impactful mobile fix.',
+      effort: "Low", impact: "High",
+    });
+  }
+
+  // ── Performance perception ────────────────────────────────────────────────
+  if (data.pageSize > 800_000) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "QA risk",
+      issue: `Page is very large: ${(data.pageSize / 1000).toFixed(0)}KB`,
+      whyItMatters: "Page sizes over 800KB create slow load times on mobile connections. A 3-second load on mobile causes ~53% bounce rate.",
+      suggestedFix: "Audit and minify CSS, JavaScript, and HTML. Ensure images are compressed and lazy-loaded. Consider removing unused scripts.",
+      effort: "High", impact: "High",
+    });
+  } else if (data.pageSize > 400_000) {
+    findings.push({
+      id: fid(), priority: "important", category: "QA risk",
+      issue: `Page size is large: ${(data.pageSize / 1000).toFixed(0)}KB`,
+      whyItMatters: "Pages over 400KB take noticeably longer to load on slower mobile connections, increasing bounce rate before users see the content.",
+      suggestedFix: "Review page weight — minify CSS/JS, compress images, and lazy-load assets below the fold.",
+      effort: "Medium", impact: "Medium",
+    });
+  }
+
+  if (data.scripts > 15) {
+    findings.push({
+      id: fid(), priority: "important", category: "QA risk",
+      issue: `High number of scripts loaded: ${data.scripts} <script> tags`,
+      whyItMatters: "Each additional script adds network requests and blocking time. More than 10 scripts typically indicates unused or redundant third-party code.",
+      suggestedFix: "Audit all scripts. Remove unused analytics, chat widgets, and tracking that are not providing direct value. Consider lazy-loading non-critical scripts.",
+      effort: "Medium", impact: "Medium",
+    });
+  }
+
+  // ── QA risk ───────────────────────────────────────────────────────────────
+  if (!data.signals.hasCanonical) {
+    findings.push({
+      id: fid(), priority: "later", category: "QA risk",
+      issue: "No canonical tag found",
+      whyItMatters: "Without a canonical tag, duplicate content issues can arise if the page is accessible via multiple URLs. This dilutes SEO authority and can cause indexing confusion.",
+      suggestedFix: 'Add <link rel="canonical" href="[page URL]"> to the <head> tag.',
+      effort: "Low", impact: "Low",
+    });
+  }
+
+  if (data.forms.total > 0 && data.ctaElements.length === 0) {
+    findings.push({
+      id: fid(), priority: "important", category: "UX friction",
+      issue: `${data.forms.total} form${data.forms.total > 1 ? "s" : ""} found but no clear CTA guiding users to complete them`,
+      whyItMatters: "Forms without directional CTAs have lower completion rates. Users are not sure why they are filling in the form or what happens next.",
+      suggestedFix: "Add a clear heading above each form that explains the value of completing it. Add a prominent submit button with outcome-based copy.",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  if (data.links.total > 60) {
+    findings.push({
+      id: fid(), priority: "later", category: "UX friction",
+      issue: `High link density: ${data.links.total} links on the page`,
+      whyItMatters: "Excessive links reduce the visual hierarchy and make it harder for users to identify the primary path. Every additional link competes with the main CTA.",
+      suggestedFix: "Review the navigation and footer structure. Reduce links to only those that serve a clear user need at this stage of the funnel.",
+      effort: "Medium", impact: "Low",
+    });
+  }
+
+  // ── AI-builder risk ───────────────────────────────────────────────────────
+  if (!data.signals.hasSchemaMarkup) {
+    findings.push({
+      id: fid(), priority: "later", category: "AI-builder risk",
+      issue: "No structured data / schema markup found",
+      whyItMatters: "Schema markup helps search engines understand the page content and enables rich results. AI builders rarely add this automatically.",
+      suggestedFix: "Add JSON-LD schema markup appropriate for the page type (Organization, Product, WebSite). This can be added in the <head> without design changes.",
+      effort: "Low", impact: "Low",
+    });
+  }
+
+  // ── Add URL-signal findings on top of data-driven ones ──────────────────
+  const urlBased = getURLSignalFindings(url);
+  return [...findings, ...urlBased];
+}
+
+// ── Real audit result from API data ──────────────────────────────────────────
+
+function buildRealAuditResult(data: APIAuditData, url: string): AuditResult {
+  const findings = generateFindingsFromAPIData(data, url);
+  const domain = (() => {
+    try { return new URL(data.url).hostname.replace("www.", ""); }
+    catch { return data.url; }
+  })();
+
+  const builder = detectBuilder(url);
+  const type = classifySite(url);
+
+  const urgentFindings = findings.filter((f) => f.priority === "urgent");
+  const quickWin = findings.find((f) => f.effort === "Low" && f.impact === "High");
+
+  // Score: start at 85, deduct per urgent/important finding
+  const score = Math.max(
+    10,
+    85 - urgentFindings.length * 8 - findings.filter((f) => f.priority === "important").length * 4
+  );
+
+  return {
+    domain,
+    siteType: siteTypeLabel(type, builder),
+    detectedBuilder: builder,
+    overallScore: score,
+    topUrgentIssue: urgentFindings[0]?.issue ?? "No critical issues detected",
+    bestQuickWin: quickWin?.issue ?? "See findings below",
+    mainProductRisk:
+      urgentFindings.find((f) => f.category === "Conversion" || f.category === "Product clarity")
+        ?.issue ??
+      urgentFindings[0]?.issue ??
+      "Review full findings",
+    findings,
+  };
+}
+
 // ── Priority config ───────────────────────────────────────────────────────────
 
 const P_CONFIG = {
@@ -590,6 +904,8 @@ export default function AuditTool() {
   const [url, setUrl] = useState("");
   const [stageIndex, setStageIndex] = useState(0);
   const [result, setResult] = useState<AuditResult | null>(null);
+  const [apiData, setApiData] = useState<APIAuditData | null>(null); // real data from API
+  const [isRealAudit, setIsRealAudit] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -665,19 +981,75 @@ export default function AuditTool() {
     if (!norm) { setError("Enter a URL to audit."); return; }
     setError("");
     setAuditState("loading");
+    setApiData(null);
+    setIsRealAudit(false);
     setStageIndex(0);
-    for (let i = 1; i < LOADING_STAGES.length; i++) {
-      await new Promise((r) => setTimeout(r, 480));
-      setStageIndex(i);
+
+    // ── Stage 1: fetch via real API ──────────────────────────────────────────
+    await new Promise((r) => setTimeout(r, 300));
+    setStageIndex(1);
+
+    let fetchedData: APIAuditData | null = null;
+    let apiError: string | null = null;
+
+    try {
+      const response = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: norm }),
+        signal: AbortSignal.timeout(12000), // 12s client timeout
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        apiError = body.error ?? `Server returned ${response.status}`;
+      } else {
+        fetchedData = await response.json() as APIAuditData;
+      }
+    } catch (err) {
+      const isTimeout = (err as Error).name === "TimeoutError" || (err as Error).name === "AbortError";
+      apiError = isTimeout
+        ? "The site took too long to respond. Try a different URL."
+        : "Could not reach the target site. It may block automated requests.";
     }
-    await new Promise((r) => setTimeout(r, 380));
-    setResult(buildAuditResult(norm));
+
+    // ── Stage 2: analyse ─────────────────────────────────────────────────────
+    setStageIndex(2);
+    await new Promise((r) => setTimeout(r, 400));
+    setStageIndex(3);
+    await new Promise((r) => setTimeout(r, 300));
+
+    if (fetchedData) {
+      // ✅ Real data available — use it
+      setApiData(fetchedData);
+      setIsRealAudit(true);
+      setResult(buildRealAuditResult(fetchedData, norm));
+    } else {
+      // ⚠️ API failed — fall back to heuristic mock with an error note
+      setIsRealAudit(false);
+      const mockResult = buildAuditResult(norm);
+      // Surface the error message in the findings as a top note
+      if (apiError) {
+        mockResult.findings.unshift({
+          id: "api-error",
+          priority: "important",
+          category: "QA risk",
+          issue: `Live scan failed: ${apiError}`,
+          whyItMatters: "The auditor could not fetch this URL — it may block bots, require authentication, or use client-side rendering. Findings below are based on URL pattern heuristics only.",
+          suggestedFix: "Try a different URL, or verify the site is publicly accessible without login.",
+          effort: "Low", impact: "Low",
+        });
+      }
+      setResult(mockResult);
+    }
+
     setAuditState("results");
     setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
   function reset() {
-    setAuditState("idle"); setUrl(""); setResult(null); setError(""); setCopied(false);
+    setAuditState("idle"); setUrl(""); setResult(null); setApiData(null);
+    setIsRealAudit(false); setError(""); setCopied(false);
     setDrawerOpen(false); setSelectedFinding(null);
     setCategoryOrder(DEFAULT_CATEGORY_ORDER);
   }
@@ -702,7 +1074,10 @@ export default function AuditTool() {
     const text = sorted.map((f) =>
       `[${f.priority.toUpperCase()}] ${f.category}\n${f.issue}\nWhy: ${f.whyItMatters}\nFix: ${f.suggestedFix}`
     ).join("\n\n");
-    navigator.clipboard.writeText(`AI Builder QA Audit — ${result.domain}\nPrioritised by: ${categoryOrder.slice(0, 3).join(", ")}\n\n${text}\n\nDemo audit based on URL pattern and product heuristics`).catch(() => null);
+    const auditNote = isRealAudit
+      ? `Real audit · page fetched in ${apiData?.fetchDuration ?? "?"}ms · findings from actual HTML`
+      : "Heuristic mode · page could not be fetched · findings based on URL patterns";
+    navigator.clipboard.writeText(`AI Builder QA Audit — ${result.domain}\nPrioritised by: ${categoryOrder.slice(0, 3).join(", ")}\n${auditNote}\n\n${text}`).catch(() => null);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -807,7 +1182,7 @@ export default function AuditTool() {
           ))}
         </div>
 
-        <p className="mt-3 text-xs text-zinc-400">Demo audit based on URL pattern and product heuristics · No page crawling · No data stored</p>
+        <p className="mt-3 text-xs text-zinc-400">Real audit: fetches the page and analyses actual HTML · If blocked, falls back to URL heuristics · No data stored</p>
       </div>
     </div>
   );
@@ -851,13 +1226,31 @@ export default function AuditTool() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
+                <div className={`h-2 w-2 rounded-full ${isRealAudit ? "bg-green-500" : "bg-amber-500"}`} />
                 <span className="font-mono text-xs font-semibold uppercase tracking-widest text-zinc-500">Audit complete</span>
+                {isRealAudit ? (
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 font-mono text-[9px] font-semibold text-green-700">
+                    ✓ Real page data
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 font-mono text-[9px] font-semibold text-amber-700">
+                    ⚠ Heuristic mode
+                  </span>
+                )}
               </div>
               <p className="text-sm text-zinc-500">
                 <span className="font-medium text-zinc-800">{result.domain}</span>
                 <span className="ml-2 rounded border border-zinc-200 px-2 py-0.5 font-mono text-[10px] text-zinc-500">{result.siteType}</span>
               </p>
+              {/* Real data metadata */}
+              {apiData && (
+                <p className="mt-1 font-mono text-[10px] text-zinc-400">
+                  {apiData.title ? `Title: "${apiData.title.slice(0, 50)}${apiData.title.length > 50 ? "…" : ""}"` : "No title"} ·
+                  {" "}{apiData.wordCount} words ·
+                  {" "}{(apiData.pageSize / 1000).toFixed(0)}KB ·
+                  {" "}{apiData.fetchDuration}ms
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <button onClick={copyFullReport} className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400">
@@ -968,7 +1361,10 @@ export default function AuditTool() {
           </div>
 
           <p className="text-center text-xs text-zinc-400">
-            Demo audit based on URL pattern and product heuristics · Not a real page crawl
+            {isRealAudit
+              ? `Real audit · fetched ${apiData?.pageSize ? `${(apiData.pageSize / 1000).toFixed(0)}KB` : "page"} in ${apiData?.fetchDuration ?? "?"}ms · findings from actual HTML`
+              : "Heuristic mode · could not fetch page · findings based on URL patterns"
+            }
           </p>
         </div>
 
