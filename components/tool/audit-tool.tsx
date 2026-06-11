@@ -8,15 +8,14 @@ type AuditState = "idle" | "loading" | "results";
 type SiteType = "saas" | "ecommerce" | "devtool" | "portfolio" | "enterprise" | "marketplace" | "landing" | "ai-builder";
 type Priority = "urgent" | "important" | "later";
 type Category =
-  | "Product clarity"
-  | "UX friction"
-  | "Mobile responsiveness"
-  | "Trust signals"
+  | "Product Clarity"
+  | "User Journey"
   | "Conversion"
+  | "UX Friction"
+  | "Trust Signals"
   | "Accessibility"
-  | "QA risk"
-  | "AI-builder risk"
-  | "Content quality";
+  | "Mobile Experience"
+  | "Performance Perception";
 type Effort = "Low" | "Medium" | "High";
 type Impact = "Low" | "Medium" | "High";
 type ToolId = "lovable" | "base44" | "claude" | "generic";
@@ -62,15 +61,14 @@ const LOADING_STAGES = [
 // ── Fix prompt generator ──────────────────────────────────────────────────────
 
 const CATEGORY_CONTEXT: Record<Category, string> = {
-  "Product clarity": "Focus on the hero section, headline, and primary value proposition.",
-  "UX friction": "Trace the user flow and fix the interaction causing friction.",
-  "Mobile responsiveness": "Work in mobile-first mode. Test at 375px viewport width.",
-  "Trust signals": "Add trust elements near the primary CTA or sign-up flow.",
-  "Conversion": "Focus on the conversion path — reduce gates and friction before value delivery.",
-  "Accessibility": "Check WCAG AA compliance for this element.",
-  "QA risk": "Add proper handling for this edge case — loading, error, and empty states.",
-  "AI-builder risk": "This is a common gap in AI-built apps. Add explicit handling for this scenario.",
-  "Content quality": "Update copy to be specific, outcome-focused, and relevant to the target user.",
+  "Product Clarity": "Focus on the hero, headline, and value proposition. The user must understand what the product does and who it is for within 5 seconds.",
+  "User Journey": "Map the user's path from arrival to activation. Identify where they get stuck, confused, or lose momentum.",
+  "Conversion": "Focus on the activation path — reduce gates, remove friction, and make the primary action unavoidable above the fold.",
+  "UX Friction": "Identify the specific interaction causing friction. Fix the flow, not the surface. Every extra step reduces completion rate.",
+  "Trust Signals": "Add trust elements near the decision point. B2B buyers look for proof before they act. Show it where it matters.",
+  "Accessibility": "This feature must work for all users. Check WCAG AA compliance and test with a screen reader before marking this resolved.",
+  "Mobile Experience": "Switch to mobile-first. Test at 375px. Primary actions must be reachable without scrolling. Touch targets must be at least 44px.",
+  "Performance Perception": "Slow load time is a product experience failure, not just a technical issue. Users form judgments before the page is fully rendered.",
 };
 
 const TOOL_CONSTRAINTS: Record<ToolId, string> = {
@@ -174,56 +172,56 @@ function getAIBuilderFindings(url: string, builder: string | null): AuditFinding
 
   const base: AuditFinding[] = [
     {
-      id: fid(), priority: "urgent", category: "AI-builder risk",
+      id: fid(), priority: "urgent", category: "User Journey",
       issue: "Empty states likely not handled — pages may break when data is missing",
       whyItMatters: "AI builders scaffold happy-path flows. Empty states (no data, first-time user, loading error) are rarely generated automatically and will show broken UI in production.",
       suggestedFix: "Add explicit empty state components for every list, table, or data display. Include: a message, an icon, and a suggested next action.",
       effort: "Medium", impact: "High",
     },
     {
-      id: fid(), priority: "urgent", category: "Product clarity",
+      id: fid(), priority: "urgent", category: "Product Clarity",
       issue: "Value proposition may not be clear within 5 seconds",
       whyItMatters: `Products built quickly with ${b} often have placeholder or generic headlines. A new visitor must understand what the product does and who it is for within 5 seconds.`,
       suggestedFix: "Rewrite the hero headline to name: what the product does, who it is for, and the specific outcome they get. Remove generic phrases like 'powerful', 'seamless', or 'next-generation'.",
       effort: "Low", impact: "High",
     },
     {
-      id: fid(), priority: "urgent", category: "QA risk",
-      issue: "Form validation likely uses builder defaults — may allow invalid submissions",
+      id: fid(), priority: "urgent", category: "Performance Perception",
+      issue: "Users may submit forms with invalid data — causing silent failures or broken flows",
       whyItMatters: "Default AI-builder form validation is often minimal: missing required field enforcement, no format checking (email, phone), no error messages on submission failure.",
       suggestedFix: "Test every form: empty submission, invalid email format, special characters, very long inputs. Add visible inline error messages for each validation failure.",
       effort: "Medium", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "AI-builder risk",
-      issue: "Authentication UX likely uses default builder patterns — may confuse users",
+      id: fid(), priority: "important", category: "User Journey",
+      issue: "The sign-in experience is using generic defaults that don't match the product voice",
       whyItMatters: `${b} generates auth flows with default copy and UX patterns. These are often generic and lack branding, onboarding context, or clear next steps after sign-up.`,
       suggestedFix: "Customise the sign-up and login flow: update copy to match product voice, add context about what happens next, and ensure the post-auth redirect lands in a useful state.",
       effort: "Medium", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Mobile responsiveness",
+      id: fid(), priority: "important", category: "Mobile Experience",
       issue: "Navigation and layout may not adapt correctly to narrow viewports",
       whyItMatters: "AI builders often generate desktop-first layouts. Mobile navigation, card grids, and data tables frequently overflow or stack incorrectly at 375px.",
       suggestedFix: "Test the full product on iPhone SE (375px). Fix: nav overflow, horizontal scrolling, button tap targets below 44px, and text below 13px.",
       effort: "Medium", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Content quality",
+      id: fid(), priority: "important", category: "Product Clarity",
       issue: "Content likely contains placeholder copy or generic AI-generated text",
       whyItMatters: "AI builders pre-populate placeholder content that is often not updated before launch. Generic copy reduces credibility and fails to communicate real product value.",
       suggestedFix: "Audit every text element: headlines, CTAs, descriptions, error messages, onboarding copy. Replace all placeholder or generic text with product-specific, outcome-focused language.",
       effort: "Low", impact: "Medium",
     },
     {
-      id: fid(), priority: "important", category: "QA risk",
-      issue: "Loading states may not be defined for async operations",
+      id: fid(), priority: "important", category: "Performance Perception",
+      issue: "Users see a blank or frozen screen while data loads — creating a broken product impression",
       whyItMatters: "When data is fetching or an action is processing, the UI should show a loading state. Without it, users click twice, assume the product is broken, or lose progress.",
       suggestedFix: "Add loading indicators for: page loads, form submissions, data fetches, and any operation taking more than 300ms. Use skeleton screens for content-heavy areas.",
       effort: "Medium", impact: "Medium",
     },
     {
-      id: fid(), priority: "later", category: "Trust signals",
+      id: fid(), priority: "later", category: "Trust Signals",
       issue: "No social proof or credibility signals visible on the main page",
       whyItMatters: "AI-built products launched quickly often have no testimonials, usage numbers, or proof of real users. Without these, new visitors have no reason to trust the product.",
       suggestedFix: "Add at least one trust signal: a user count, a testimonial, a recognised logo, or a press mention. Even 'X users signed up this week' adds credibility.",
@@ -234,8 +232,8 @@ function getAIBuilderFindings(url: string, builder: string | null): AuditFinding
   // URL-specific additions
   if (u.includes("dashboard") || u.includes("app.")) {
     base.push({
-      id: fid(), priority: "urgent", category: "QA risk",
-      issue: "Dashboard or app URL — permission and role-based access likely untested",
+      id: fid(), priority: "urgent", category: "Performance Perception",
+      issue: "Access controls are untested — users may see data they shouldn't, or be blocked from what they need",
       whyItMatters: "AI-built dashboards often lack proper permission gates. Users may access data or actions they should not be able to see, or be blocked from actions they should have.",
       suggestedFix: "Test the app as different user types: new user, existing user, admin, free tier, paid tier. Verify that each role sees only what they are supposed to see.",
       effort: "High", impact: "High",
@@ -245,7 +243,7 @@ function getAIBuilderFindings(url: string, builder: string | null): AuditFinding
   if (u.includes("pricing") || u.includes("checkout")) {
     base.push({
       id: fid(), priority: "urgent", category: "Conversion",
-      issue: "Pricing or checkout page — payment flow needs full QA before going live",
+      issue: "The payment flow has not been validated — one edge case here is a direct revenue loss",
       whyItMatters: "Payment flows in AI-built products are the highest-risk area. Edge cases: failed payment handling, double-charge prevention, webhook confirmation, and email receipts must all be tested.",
       suggestedFix: "Test the full payment flow end-to-end with a test card: success, decline, card error, 3DS challenge, refund. Verify confirmation email is sent and the user state updates correctly.",
       effort: "High", impact: "High",
@@ -255,7 +253,7 @@ function getAIBuilderFindings(url: string, builder: string | null): AuditFinding
   if (u.includes("signup") || u.includes("register") || u.includes("onboard")) {
     base.push({
       id: fid(), priority: "important", category: "Conversion",
-      issue: "Sign-up page detected — onboarding friction likely too high",
+      issue: "The activation flow likely asks for more than users are willing to give before seeing value",
       whyItMatters: "AI-generated sign-up flows often ask for too much information too early. Every extra field before the user sees product value reduces completion by ~10%.",
       suggestedFix: "Reduce sign-up to the minimum required: email + password, or OAuth only. Move company name, role, team size to the onboarding flow after the user sees value.",
       effort: "Low", impact: "High",
@@ -268,36 +266,36 @@ function getAIBuilderFindings(url: string, builder: string | null): AuditFinding
 function getSaaSFindings(): AuditFinding[] {
   return [
     {
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: "Hero headline likely describes a feature, not a user outcome",
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: "The headline describes what the product is, not what changes for the user who buys it",
       whyItMatters: "A new visitor decides within 5 seconds whether to engage. Feature-led headlines ('Powerful AI platform') do not communicate value. Outcome-led headlines do ('Cut your support tickets in half').",
       suggestedFix: "Rewrite the headline to complete: 'After using this, you can finally...' or 'This replaces the pain of...'. Name a specific, measurable outcome.",
       effort: "Low", impact: "High",
     },
     {
       id: fid(), priority: "urgent", category: "Conversion",
-      issue: "Sign-up likely requires account creation before showing product value",
+      issue: "Users are asked to commit before experiencing the product — most leave without converting",
       whyItMatters: "Gated product experiences cause 40–70% drop-off before a user sees value. Best-in-class SaaS shows the product before asking for email.",
       suggestedFix: "Add an interactive demo, sandbox, or product tour that requires no sign-up. Let users experience the core value before committing to account creation.",
       effort: "High", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Trust signals",
-      issue: "Social proof not visible above the fold",
+      id: fid(), priority: "important", category: "Trust Signals",
+      issue: "There is no evidence of existing customers visible without scrolling — a trust gap at the top of the funnel",
       whyItMatters: "B2B buyers look for proof of existing customers before engaging. Customer logos or testimonials below the fold may never be seen.",
       suggestedFix: "Move at least 3 customer logos or one specific testimonial to the hero section, below the headline and above the first scroll break.",
       effort: "Low", impact: "Medium",
     },
     {
-      id: fid(), priority: "important", category: "Mobile responsiveness",
-      issue: "Primary CTA accessibility on mobile viewports",
+      id: fid(), priority: "important", category: "Mobile Experience",
+      issue: "The primary action may be invisible or unreachable on mobile — half the audience cannot convert",
       whyItMatters: "If the primary CTA is only visible on desktop or buried in mobile navigation, mobile traffic — often 50%+ of visitors — cannot convert.",
       suggestedFix: "Verify the primary CTA is visible and tappable above the fold on 375px viewport. Ensure tap target is at least 44×44px.",
       effort: "Low", impact: "High",
     },
     {
-      id: fid(), priority: "later", category: "UX friction",
-      issue: "Sign-up form likely collects more information than needed",
+      id: fid(), priority: "later", category: "UX Friction",
+      issue: "The activation form is collecting more than is needed — every extra field reduces completion",
       whyItMatters: "Each extra field in a sign-up form reduces completion rate by approximately 10%. Most information (company size, role, use case) can be collected post-activation.",
       suggestedFix: "Reduce sign-up to email + password minimum. Move company info and role to post-signup onboarding where intent is already established.",
       effort: "Low", impact: "Medium",
@@ -308,7 +306,7 @@ function getSaaSFindings(): AuditFinding[] {
 function getPortfolioFindings(): AuditFinding[] {
   return [
     {
-      id: fid(), priority: "urgent", category: "Product clarity",
+      id: fid(), priority: "urgent", category: "Product Clarity",
       issue: "Role and specialty not immediately clear",
       whyItMatters: "A hiring manager or client makes their judgment in 3–5 seconds. If your role and specialty are not clear in the hero, they will not read further.",
       suggestedFix: "First sentence of the hero must include: your role, your specialty, and who you help. e.g. 'Product Manager specialising in B2B fintech platforms.'",
@@ -322,22 +320,22 @@ function getPortfolioFindings(): AuditFinding[] {
       effort: "Low", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Trust signals",
+      id: fid(), priority: "important", category: "Trust Signals",
       issue: "Case studies lack specific, measurable outcomes",
       whyItMatters: "Portfolios that describe what was built without naming what changed in measurable terms are unconvincing. Outcomes are more credible than descriptions.",
       suggestedFix: "For each case study, add: the specific metric that moved, by how much, and over what timeframe. e.g. 'Reduced settlement support tickets by 40% in 90 days.'",
       effort: "Medium", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Mobile responsiveness",
+      id: fid(), priority: "important", category: "Mobile Experience",
       issue: "Portfolio layout may not adapt to mobile viewports",
       whyItMatters: "Hiring managers often review portfolios on phones. A broken mobile layout signals poor attention to detail — exactly the opposite of what a PM or designer wants to communicate.",
       suggestedFix: "Test on iPhone SE (375px). Ensure all case studies, images, and contact paths are readable and accessible. Fix any horizontal overflow.",
       effort: "Medium", impact: "Medium",
     },
     {
-      id: fid(), priority: "later", category: "Content quality",
-      issue: "Headlines and section titles may be generic",
+      id: fid(), priority: "later", category: "Product Clarity",
+      issue: "Section titles are generic — they describe structure, not the work or the person",
       whyItMatters: "Generic headers ('About Me', 'My Work') are forgettable. Specific, voice-driven headers make a portfolio memorable.",
       suggestedFix: "Replace generic section titles with specific statements that reflect your PM style. e.g. 'Products I shipped' → 'What I built and what changed because of it.'",
       effort: "Low", impact: "Low",
@@ -348,7 +346,7 @@ function getPortfolioFindings(): AuditFinding[] {
 function getEcommerceFindings(): AuditFinding[] {
   return [
     {
-      id: fid(), priority: "urgent", category: "Trust signals",
+      id: fid(), priority: "urgent", category: "Trust Signals",
       issue: "Payment security signals may not be visible at checkout",
       whyItMatters: "65% of shoppers abandon checkout due to trust concerns. Security badges and accepted payment logos must appear near the checkout CTA.",
       suggestedFix: "Add SSL badge, accepted payment icons, and a returns policy summary above the Place Order button.",
@@ -362,21 +360,21 @@ function getEcommerceFindings(): AuditFinding[] {
       effort: "Low", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Mobile responsiveness",
+      id: fid(), priority: "important", category: "Mobile Experience",
       issue: "Product image gallery touch interactions may not work correctly",
       whyItMatters: "Mobile shoppers rely on swiping through product images. Pinch-to-zoom and swipe gestures must work on iOS Safari and Android Chrome.",
       suggestedFix: "Test product gallery with touch gestures. Ensure pinch-to-zoom is not disabled via CSS. Test horizontal swipe navigation.",
       effort: "Medium", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "QA risk",
+      id: fid(), priority: "important", category: "Performance Perception",
       issue: "Cart state may not persist across page refreshes or navigation",
       whyItMatters: "If cart items disappear when a user navigates away or refreshes, it is one of the most frustrating experiences in e-commerce and directly causes drop-off.",
       suggestedFix: "Test: add items to cart → navigate to another page → return to cart. Items must persist. Also test: close browser tab and reopen.",
       effort: "Low", impact: "High",
     },
     {
-      id: fid(), priority: "later", category: "UX friction",
+      id: fid(), priority: "later", category: "UX Friction",
       issue: "Checkout form collects information in non-optimal order",
       whyItMatters: "The standard checkout order (email → shipping → payment) is optimised for conversion. Non-standard flows create confusion and increase drop-off.",
       suggestedFix: "Follow the standard checkout order: email/contact → shipping address → delivery method → payment. Do not ask for account creation before payment details.",
@@ -388,29 +386,29 @@ function getEcommerceFindings(): AuditFinding[] {
 function getDevToolFindings(): AuditFinding[] {
   return [
     {
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: "Time-to-first-working-result likely too long",
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: "Developers cannot see a working result quickly — the most common reason developers abandon evaluation",
       whyItMatters: "Developer tools are evaluated by how quickly a developer can see a working result. If the quickstart takes more than 10 minutes, developers move on to alternatives.",
       suggestedFix: "Create a quickstart that reaches a working result in 3 steps or fewer. Measure and optimise time-to-first-success as a product metric.",
       effort: "High", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Trust signals",
+      id: fid(), priority: "important", category: "Trust Signals",
       issue: "Status page not linked from main navigation",
       whyItMatters: "Developer tool buyers check uptime history before committing. A missing status page is a trust gap for engineering teams evaluating reliability.",
       suggestedFix: "Add a status page link to the main navigation footer and the dashboard. Link to historical uptime data.",
       effort: "Low", impact: "Medium",
     },
     {
-      id: fid(), priority: "important", category: "QA risk",
-      issue: "Code examples in documentation may not be tested",
+      id: fid(), priority: "important", category: "Performance Perception",
+      issue: "Copy-paste code that breaks on first use destroys developer trust immediately and permanently",
       whyItMatters: "Copy-paste code that does not work destroys developer trust faster than anything else. One broken example can cause a developer to abandon evaluation entirely.",
       suggestedFix: "Run CI against all code examples in documentation on every release. Test in all officially supported language versions and environments.",
       effort: "High", impact: "High",
     },
     {
-      id: fid(), priority: "later", category: "UX friction",
-      issue: "Search does not support developer-style queries",
+      id: fid(), priority: "later", category: "UX Friction",
+      issue: "Documentation search fails for the exact queries developers need most — error codes, method names, SDK specifics",
       whyItMatters: "Developers search docs with specific technical queries: error codes, method names, SDK names. Generic search fails these.",
       suggestedFix: "Implement Algolia DocSearch or equivalent. Explicitly index error codes, method names, and common technical queries.",
       effort: "Medium", impact: "Medium",
@@ -421,29 +419,29 @@ function getDevToolFindings(): AuditFinding[] {
 function getLandingFindings(): AuditFinding[] {
   return [
     {
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: "Value proposition not communicable in 5 seconds",
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: "The product's core promise requires too much effort to understand — most visitors leave before getting there",
       whyItMatters: "Landing pages have one job: convert a visitor into a lead. If the value proposition requires reading, most visitors will not see it.",
       suggestedFix: "Reduce the hero to: one outcome-focused headline, two supporting sentences maximum, one CTA. Remove everything else above the fold.",
       effort: "Low", impact: "High",
     },
     {
       id: fid(), priority: "urgent", category: "Conversion",
-      issue: "Primary CTA competes with secondary actions",
+      issue: "Multiple competing actions are splitting user attention — the primary conversion path is diluted",
       whyItMatters: "Every additional CTA reduces the conversion rate of the primary one. A landing page with one CTA converts 3× better than one with multiple.",
       suggestedFix: "Remove or visually eliminate all CTAs except the primary action. If navigation is present, consider removing it from the landing page entirely.",
       effort: "Low", impact: "High",
     },
     {
-      id: fid(), priority: "important", category: "Trust signals",
+      id: fid(), priority: "important", category: "Trust Signals",
       issue: "No early social proof or credibility signals",
       whyItMatters: "Pre-launch and early-stage landing pages need trust signals even without a customer base. Waitlist count, press mention, or founder credibility fill this gap.",
       suggestedFix: "Add at least one trust signal: a waitlist counter, a press mention, a recognisable logo, or a founder credential with relevant context.",
       effort: "Low", impact: "Medium",
     },
     {
-      id: fid(), priority: "later", category: "QA risk",
-      issue: "Form submission flow not tested end-to-end",
+      id: fid(), priority: "later", category: "Performance Perception",
+      issue: "Leads are likely being lost silently — form submission paths are rarely tested beyond the button click",
       whyItMatters: "A broken sign-up form on a landing page loses leads silently. Most teams test form design but not the full submission → confirmation email → unsubscribe flow.",
       suggestedFix: "Test: submit → confirmation page renders → confirmation email delivered → unsubscribe path works. Test on mobile.",
       effort: "Low", impact: "High",
@@ -458,7 +456,7 @@ function getURLSignalFindings(url: string): AuditFinding[] {
   if (u.includes("pricing")) {
     extra.push({
       id: fid(), priority: "urgent", category: "Conversion",
-      issue: "Pricing page — self-service evaluation path may be gated",
+      issue: "This pricing page may require a sales call to proceed — gating out buyers who prefer to self-evaluate",
       whyItMatters: "Pricing pages that require a sales call gate out up to 60% of developer and SMB buyers who self-qualify. This is the single highest-impact conversion issue on pricing pages.",
       suggestedFix: "Add a free tier, sandbox, or interactive demo. Remove 'Contact sales' as the only CTA on the pricing page. Show at least one tier with transparent, immediate access.",
       effort: "High", impact: "High",
@@ -467,7 +465,7 @@ function getURLSignalFindings(url: string): AuditFinding[] {
 
   if (u.includes("login") || u.includes("signin")) {
     extra.push({
-      id: fid(), priority: "important", category: "QA risk",
+      id: fid(), priority: "important", category: "Performance Perception",
       issue: "Login page — password reset and error recovery flows need testing",
       whyItMatters: "Login errors are often the first experience a returning user has after a break. Broken password reset or unhelpful error messages cause churn before the user even re-engages.",
       suggestedFix: "Test: wrong password error message, too-many-attempts handling, password reset email delivery, and reset link expiry behaviour.",
@@ -477,8 +475,8 @@ function getURLSignalFindings(url: string): AuditFinding[] {
 
   if (u.includes("dashboard") || u.includes("/app")) {
     extra.push({
-      id: fid(), priority: "urgent", category: "QA risk",
-      issue: "Dashboard — empty and loading states need explicit handling",
+      id: fid(), priority: "urgent", category: "Performance Perception",
+      issue: "New users land in an empty dashboard with no guidance — the first impression is a blank screen",
       whyItMatters: "New users and users with no data will see the dashboard before any content exists. Without explicit empty states, the page looks broken.",
       suggestedFix: "Add empty state components for every list, chart, and data display. Include: an illustration or icon, a message explaining the empty state, and a CTA for the next action.",
       effort: "Medium", impact: "High",
@@ -487,8 +485,8 @@ function getURLSignalFindings(url: string): AuditFinding[] {
 
   if (u.includes("checkout") || u.includes("cart")) {
     extra.push({
-      id: fid(), priority: "urgent", category: "QA risk",
-      issue: "Checkout flow — payment error handling and recovery not tested",
+      id: fid(), priority: "urgent", category: "Performance Perception",
+      issue: "A failed payment with no recovery path is a direct revenue loss — one of the highest-cost bugs in any product",
       whyItMatters: "A failed payment with no clear recovery path is the highest-cost bug in a transactional product. Users who cannot retry immediately are lost.",
       suggestedFix: "Test: declined card, network error during payment, session timeout during checkout. Verify each case shows a clear error message and a working retry path.",
       effort: "High", impact: "High",
@@ -497,8 +495,8 @@ function getURLSignalFindings(url: string): AuditFinding[] {
 
   if (u.includes("docs") || u.includes("/api")) {
     extra.push({
-      id: fid(), priority: "important", category: "Product clarity",
-      issue: "Documentation — quickstart or getting started may not be immediately visible",
+      id: fid(), priority: "important", category: "Product Clarity",
+      issue: "The fastest path to a working result is buried — developers leave before finding it",
       whyItMatters: "The first question a developer asks is 'how quickly can I see this working?' If the quickstart is not the first thing on the docs homepage, evaluation time increases significantly.",
       suggestedFix: "Place a 'Get started' or quickstart link at the very top of the docs homepage, before any reference documentation or conceptual guides.",
       effort: "Low", impact: "High",
@@ -547,7 +545,7 @@ function buildAuditResult(url: string): AuditResult {
     overallScore: baseScores[type],
     topUrgentIssue: urgent[0]?.issue ?? "No critical issues detected",
     bestQuickWin: quickWin?.issue ?? allFindings[0]?.issue ?? "See findings below",
-    mainProductRisk: urgent.find((f) => f.category === "Conversion" || f.category === "Product clarity")?.issue ?? urgent[0]?.issue ?? "Review full findings",
+    mainProductRisk: urgent.find((f) => f.category === "Conversion" || f.category === "Product Clarity")?.issue ?? urgent[0]?.issue ?? "Review full findings",
     findings: allFindings,
   };
 }
@@ -588,96 +586,99 @@ interface APIAuditData {
 function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFinding[] {
   _idCounter = 0;
   const findings: AuditFinding[] = [];
-  const urlLower = url.toLowerCase();
 
-  // ── Product clarity ────────────────────────────────────────────────────────
+  // ── PRODUCT CLARITY ─────────────────────────────────────────────────────────
+  // What users see in the first 5 seconds determines whether they stay.
+
   if (!data.title) {
     findings.push({
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: "Page has no title tag",
-      whyItMatters: "A missing title is a critical SEO and product clarity failure. Search engines will auto-generate a title, which is almost always wrong. First impressions on search results and social shares are broken.",
-      suggestedFix: "Add a descriptive <title> tag that names the product, communicates the core value proposition, and is between 50–60 characters.",
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: "This product has no name on the page",
+      whyItMatters: "A missing title tag means the product has no identity in search results, browser tabs, or shared links. The first thing a user sees about your product is blank.",
+      suggestedFix: "Add a <title> tag with the product name and a short value statement. e.g. 'ProductName — [what it does in 5 words]'. Keep it under 60 characters.",
       effort: "Low", impact: "High",
     });
   } else if (data.title.length < 20) {
     findings.push({
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: `Title tag is too short: "${data.title}"`,
-      whyItMatters: "A very short title does not communicate the product's value or context. Users scanning search results or browser tabs cannot understand what the product does.",
-      suggestedFix: `Expand the title to describe the product clearly. e.g. "${data.title} — [what it does] for [who]"`,
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: `The product name is too vague to communicate value: "${data.title}"`,
+      whyItMatters: "A title under 20 characters cannot communicate what the product does or who it is for. Users scanning search results will not know why to click.",
+      suggestedFix: `Expand the title: "${data.title} — [what it does] for [who]". Make the value visible before the user even clicks.`,
       effort: "Low", impact: "High",
     });
   } else if (data.title.length > 70) {
     findings.push({
-      id: fid(), priority: "later", category: "Product clarity",
-      issue: "Title tag may be truncated in search results",
-      whyItMatters: "Google truncates titles longer than ~60 characters in search results. The most important part of the value proposition may be cut off.",
-      suggestedFix: "Trim the title to under 60 characters. Front-load the product name and primary value prop.",
+      id: fid(), priority: "later", category: "Product Clarity",
+      issue: "The product headline gets cut off in search results",
+      whyItMatters: "Titles longer than 60 characters are truncated in Google, Slack, and most social previews. The part that matters most may never be read.",
+      suggestedFix: "Trim to under 60 characters. Put the product name and primary value first. Cut anything that appears after the first value statement.",
       effort: "Low", impact: "Low",
     });
   }
 
   if (!data.description) {
     findings.push({
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: "No meta description found",
-      whyItMatters: "Without a meta description, search engines generate their own preview text — usually poorly. This is a missed opportunity to control first impressions and drive qualified clicks.",
-      suggestedFix: "Add a <meta name='description'> tag with 120–155 characters. Lead with the user outcome, not the product feature.",
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: "No product description visible to users before they arrive",
+      whyItMatters: "Without a meta description, search engines and social platforms auto-generate preview text — usually a random sentence from the page. The first controlled impression of your product is lost.",
+      suggestedFix: "Write a 120–155 character meta description that leads with the user outcome: 'Stop doing [painful thing]. [Product] helps [user type] achieve [goal] in [timeframe].'",
       effort: "Low", impact: "High",
     });
   } else if (data.description.length < 50) {
     findings.push({
-      id: fid(), priority: "important", category: "Product clarity",
-      issue: "Meta description is too short to communicate value",
-      whyItMatters: "A meta description under 50 characters does not give enough context to convince a user to click from search results.",
-      suggestedFix: "Expand the description to 120–155 characters. Describe what the product does, who it's for, and what the user gets.",
+      id: fid(), priority: "important", category: "Product Clarity",
+      issue: "The product description is too brief to drive qualified clicks",
+      whyItMatters: "A meta description under 50 characters cannot communicate context or value. Users scanning results cannot tell if this product is relevant to them.",
+      suggestedFix: "Expand to 120–155 characters. Describe the user problem, the solution, and the audience. Lead with what changes for the user, not what the product does.",
       effort: "Low", impact: "Medium",
     });
   }
 
   if (data.h1Tags.length === 0) {
     findings.push({
-      id: fid(), priority: "urgent", category: "Product clarity",
-      issue: "No H1 heading found on the page",
-      whyItMatters: "The H1 is the primary statement of what this page is about. Its absence signals to both users and search engines that the page lacks a clear purpose.",
-      suggestedFix: "Add a single, prominent H1 that names the product and communicates the core user outcome. It should be the first major text a user reads.",
+      id: fid(), priority: "urgent", category: "Product Clarity",
+      issue: "There is no clear value statement anchoring the page",
+      whyItMatters: "Without an H1, there is no primary message for users or search engines to anchor to. New visitors have no single statement to evaluate whether the product is for them.",
+      suggestedFix: "Add one H1 that states the core user outcome — not the product feature. 'Finally, [outcome] without [pain]' is more powerful than '[Product] is the platform for [category]'.",
       effort: "Low", impact: "High",
     });
   } else if (data.h1Tags.length > 3) {
     findings.push({
-      id: fid(), priority: "important", category: "Product clarity",
-      issue: `${data.h1Tags.length} H1 tags found — only one should exist`,
-      whyItMatters: "Multiple H1 tags dilute the primary message and create SEO confusion. Each page should have one dominant H1 that states the page's purpose.",
-      suggestedFix: `Reduce to a single H1 that states the core value proposition. Convert the others to H2 or H3.`,
+      id: fid(), priority: "important", category: "Product Clarity",
+      issue: `${data.h1Tags.length} competing headlines are diluting the core message`,
+      whyItMatters: "Multiple H1s mean the product is trying to say too many things at once. Users cannot identify the single most important reason to keep reading.",
+      suggestedFix: "Keep one H1 as the definitive statement of the product's value. Demote the rest to H2 or H3. The primary headline should be the last thing you cut.",
       effort: "Low", impact: "Medium",
     });
   }
 
   if (data.wordCount < 80) {
     findings.push({
-      id: fid(), priority: "important", category: "Content quality",
-      issue: "Very little readable content detected",
-      whyItMatters: "Pages with minimal text are difficult for search engines to understand and may appear thin to users. The product's value proposition and proof cannot be communicated without content.",
-      suggestedFix: "Add substantive content: what the product does, who it helps, and what problem it solves. Aim for at least 300 words of meaningful content.",
+      id: fid(), priority: "important", category: "Product Clarity",
+      issue: "Not enough product story on this page to build conviction",
+      whyItMatters: "Fewer than 80 words cannot explain what the product does, who it is for, and why it matters. Users leave when they cannot answer these three questions quickly.",
+      suggestedFix: "Add a clear product narrative: the problem, who has it, and how the product solves it. 200–300 words of well-structured copy outperforms any visual on a product page.",
       effort: "Medium", impact: "High",
     });
   }
 
-  // ── Conversion ────────────────────────────────────────────────────────────
+  // ── CONVERSION ───────────────────────────────────────────────────────────────
+  // Users who cannot take action are lost.
+
   if (data.ctaElements.length === 0 && data.buttons.total === 0) {
     findings.push({
       id: fid(), priority: "urgent", category: "Conversion",
-      issue: "No call-to-action elements detected",
-      whyItMatters: "A page without a clear CTA cannot convert visitors. Users arrive with intent and have no path forward — leading to immediate drop-off.",
-      suggestedFix: "Add a prominent primary CTA above the fold with action-oriented copy that describes the next step. e.g. 'Start free', 'Get access', 'Book a demo'.",
+      issue: "There is no activation path on this page",
+      whyItMatters: "A product page without a call to action is a dead end. Users arrive with intent, find no way to proceed, and leave. Conversion rate is zero until this is fixed.",
+      suggestedFix: "Add one dominant action above the fold. It should describe the outcome, not the mechanic: 'Start building free', not 'Sign up'. Every other action on the page should be secondary to this one.",
       effort: "Low", impact: "High",
     });
-  } else if (data.ctaElements.length === 0 && data.buttons.total < 3) {
+  } else if (data.ctaElements.length === 0) {
     findings.push({
       id: fid(), priority: "important", category: "Conversion",
-      issue: "CTA copy is generic — no outcome-based action text detected",
-      whyItMatters: "Buttons exist but none use outcome-oriented language. Generic CTAs like 'Submit' or 'Click here' convert significantly worse than outcome-based CTAs.",
-      suggestedFix: "Replace generic button text with outcome-based copy. e.g. 'Get started free', 'See how it works', 'Book your demo'. The user should know what happens next.",
+      issue: "Buttons exist but none communicate a reason to click",
+      whyItMatters: "Generic button labels like 'Submit', 'Click here', or 'Learn more' don't give users a reason to act. They describe the mechanic, not the outcome.",
+      suggestedFix: "Replace all generic button text with outcome-based copy: 'Get started free', 'See how it works', 'Start your first audit'. The user should know exactly what happens next.",
       effort: "Low", impact: "High",
     });
   }
@@ -685,9 +686,9 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
   if (!data.signals.hasPricing) {
     findings.push({
       id: fid(), priority: "important", category: "Conversion",
-      issue: "No pricing information visible on this page",
-      whyItMatters: "B2B and SaaS buyers need pricing information to self-qualify. Hiding pricing forces a sales call, gating out up to 60% of buyers who prefer to self-evaluate.",
-      suggestedFix: "Add a pricing page or pricing summary. If pricing is complex, add a starting price or a range. At minimum, indicate that pricing is available on request.",
+      issue: "Users cannot self-qualify without pricing visibility",
+      whyItMatters: "B2B and SaaS buyers make purchase decisions on their own before ever talking to sales. Hiding pricing forces a sales call that up to 60% of qualified buyers will not book.",
+      suggestedFix: "Add a pricing page or at minimum a starting price. If pricing is variable, show a floor ('Starting at $X') or a ROI statement ('Save 10+ hours per week'). Let buyers disqualify themselves.",
       effort: "Medium", impact: "High",
     });
   }
@@ -695,140 +696,138 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
   if (!data.signals.hasSignup) {
     findings.push({
       id: fid(), priority: "important", category: "Conversion",
-      issue: "No sign-up or account creation path detected",
-      whyItMatters: "Visitors who are ready to try the product have no self-service path to do so. This forces contact with sales or support, adding friction and reducing conversion.",
-      suggestedFix: "Add a self-service sign-up flow. Even a waitlist or early access form is better than no path at all. Gate it after showing product value, not before.",
+      issue: "There is no self-service path from interest to activation",
+      whyItMatters: "Users who are ready to try the product right now have nowhere to go. Requiring contact with sales adds a 24–72 hour delay to the activation moment — most users don't wait.",
+      suggestedFix: "Add a self-service activation path: free trial, demo, sandbox, or waitlist. Show this option prominently. Reduce friction between 'I'm interested' and 'I'm using it'.",
       effort: "Medium", impact: "High",
     });
   }
 
-  // ── Trust signals ─────────────────────────────────────────────────────────
-  if (!data.signals.hasContact) {
-    findings.push({
-      id: fid(), priority: "important", category: "Trust signals",
-      issue: "No contact information visible",
-      whyItMatters: "B2B buyers and enterprise evaluators look for contact information as a trust signal. Its absence creates doubt about whether the company is reachable or legitimate.",
-      suggestedFix: "Add a contact link, support email, or contact form. At minimum, include a footer with a way to reach the team.",
-      effort: "Low", impact: "Medium",
-    });
-  }
-
-  if (!data.signals.hasOgTags) {
-    findings.push({
-      id: fid(), priority: "later", category: "Trust signals",
-      issue: "No Open Graph tags found — social sharing will look broken",
-      whyItMatters: "When this page is shared on LinkedIn, Slack, or Twitter, it will show a plain URL with no image or description. This reduces click-through on shared links.",
-      suggestedFix: "Add og:title, og:description, and og:image meta tags. This takes 15 minutes and significantly improves social share appearance.",
-      effort: "Low", impact: "Medium",
-    });
-  }
-
-  // ── Accessibility ─────────────────────────────────────────────────────────
-  if (data.images.missingAlt > 5) {
-    findings.push({
-      id: fid(), priority: "urgent", category: "Accessibility",
-      issue: `${data.images.missingAlt} of ${data.images.total} images are missing alt text`,
-      whyItMatters: "Images without alt text are invisible to screen readers and fail WCAG AA accessibility standards. This also reduces SEO value of images.",
-      suggestedFix: `Add descriptive alt text to all ${data.images.missingAlt} images. For decorative images, use alt="". For content images, describe what the image shows in 10 words or fewer.`,
-      effort: "Medium", impact: "Medium",
-    });
-  } else if (data.images.missingAlt > 0) {
-    findings.push({
-      id: fid(), priority: "important", category: "Accessibility",
-      issue: `${data.images.missingAlt} image${data.images.missingAlt > 1 ? "s" : ""} missing alt text`,
-      whyItMatters: "Images without alt text fail accessibility guidelines and lose SEO value. Screen reader users cannot understand what these images communicate.",
-      suggestedFix: "Add descriptive alt text to each image. Check the images at: " + data.images.missingAltSamples.slice(0, 2).join(", "),
-      effort: "Low", impact: "Medium",
-    });
-  }
-
-  // ── Mobile responsiveness ─────────────────────────────────────────────────
-  if (!data.signals.hasMobileViewport) {
-    findings.push({
-      id: fid(), priority: "urgent", category: "Mobile responsiveness",
-      issue: "No mobile viewport meta tag found",
-      whyItMatters: "Without a viewport meta tag, the page will render as a desktop-scaled layout on mobile devices — making text tiny and navigation unusable.",
-      suggestedFix: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to the page <head>. This is the single most impactful mobile fix.',
-      effort: "Low", impact: "High",
-    });
-  }
-
-  // ── Performance perception ────────────────────────────────────────────────
-  if (data.pageSize > 800_000) {
-    findings.push({
-      id: fid(), priority: "urgent", category: "QA risk",
-      issue: `Page is very large: ${(data.pageSize / 1000).toFixed(0)}KB`,
-      whyItMatters: "Page sizes over 800KB create slow load times on mobile connections. A 3-second load on mobile causes ~53% bounce rate.",
-      suggestedFix: "Audit and minify CSS, JavaScript, and HTML. Ensure images are compressed and lazy-loaded. Consider removing unused scripts.",
-      effort: "High", impact: "High",
-    });
-  } else if (data.pageSize > 400_000) {
-    findings.push({
-      id: fid(), priority: "important", category: "QA risk",
-      issue: `Page size is large: ${(data.pageSize / 1000).toFixed(0)}KB`,
-      whyItMatters: "Pages over 400KB take noticeably longer to load on slower mobile connections, increasing bounce rate before users see the content.",
-      suggestedFix: "Review page weight — minify CSS/JS, compress images, and lazy-load assets below the fold.",
-      effort: "Medium", impact: "Medium",
-    });
-  }
-
-  if (data.scripts > 15) {
-    findings.push({
-      id: fid(), priority: "important", category: "QA risk",
-      issue: `High number of scripts loaded: ${data.scripts} <script> tags`,
-      whyItMatters: "Each additional script adds network requests and blocking time. More than 10 scripts typically indicates unused or redundant third-party code.",
-      suggestedFix: "Audit all scripts. Remove unused analytics, chat widgets, and tracking that are not providing direct value. Consider lazy-loading non-critical scripts.",
-      effort: "Medium", impact: "Medium",
-    });
-  }
-
-  // ── QA risk ───────────────────────────────────────────────────────────────
-  if (!data.signals.hasCanonical) {
-    findings.push({
-      id: fid(), priority: "later", category: "QA risk",
-      issue: "No canonical tag found",
-      whyItMatters: "Without a canonical tag, duplicate content issues can arise if the page is accessible via multiple URLs. This dilutes SEO authority and can cause indexing confusion.",
-      suggestedFix: 'Add <link rel="canonical" href="[page URL]"> to the <head> tag.',
-      effort: "Low", impact: "Low",
-    });
-  }
+  // ── USER JOURNEY ─────────────────────────────────────────────────────────────
+  // Where do users get stuck, confused, or lose momentum?
 
   if (data.forms.total > 0 && data.ctaElements.length === 0) {
     findings.push({
-      id: fid(), priority: "important", category: "UX friction",
-      issue: `${data.forms.total} form${data.forms.total > 1 ? "s" : ""} found but no clear CTA guiding users to complete them`,
-      whyItMatters: "Forms without directional CTAs have lower completion rates. Users are not sure why they are filling in the form or what happens next.",
-      suggestedFix: "Add a clear heading above each form that explains the value of completing it. Add a prominent submit button with outcome-based copy.",
+      id: fid(), priority: "important", category: "User Journey",
+      issue: "Users reach a form with no clear reason to complete it",
+      whyItMatters: "Forms without directional context have low completion rates. Users don't know why they're filling in fields or what they'll get in return. Ambiguity kills conversions.",
+      suggestedFix: "Add a heading above each form that states the value of completing it: 'Get early access to [Product]' or 'Talk to someone in 24 hours'. The form should feel like a step toward something, not a gate.",
       effort: "Low", impact: "Medium",
     });
   }
 
   if (data.links.total > 60) {
     findings.push({
-      id: fid(), priority: "later", category: "UX friction",
-      issue: `High link density: ${data.links.total} links on the page`,
-      whyItMatters: "Excessive links reduce the visual hierarchy and make it harder for users to identify the primary path. Every additional link competes with the main CTA.",
-      suggestedFix: "Review the navigation and footer structure. Reduce links to only those that serve a clear user need at this stage of the funnel.",
-      effort: "Medium", impact: "Low",
+      id: fid(), priority: "later", category: "User Journey",
+      issue: "Navigation overload is fragmenting the user's attention",
+      whyItMatters: "More than 60 links on a single page creates decision paralysis. Every extra link competes with the primary user goal. Users who can't decide what to click on, don't click anything.",
+      suggestedFix: "Audit every link on the page. Remove or consolidate any link that does not directly serve the user's goal at this stage of their journey. Fewer options means more conversions.",
+      effort: "Medium", impact: "Medium",
     });
   }
 
-  // ── AI-builder risk ───────────────────────────────────────────────────────
-  if (!data.signals.hasSchemaMarkup) {
+  // ── TRUST SIGNALS ────────────────────────────────────────────────────────────
+  // Users buy from products they trust. Trust must be earned early.
+
+  if (!data.signals.hasContact) {
     findings.push({
-      id: fid(), priority: "later", category: "AI-builder risk",
-      issue: "No structured data / schema markup found",
-      whyItMatters: "Schema markup helps search engines understand the page content and enables rich results. AI builders rarely add this automatically.",
-      suggestedFix: "Add JSON-LD schema markup appropriate for the page type (Organization, Product, WebSite). This can be added in the <head> without design changes.",
+      id: fid(), priority: "important", category: "Trust Signals",
+      issue: "There is no visible way to reach the team behind this product",
+      whyItMatters: "B2B buyers and first-time users look for a way to contact the team as a trust signal. Its absence suggests the company is either unreachable or unaccountable — both are conversion killers.",
+      suggestedFix: "Add a contact link, support email, or live chat to the navigation or footer. Enterprise buyers specifically look for this before initiating any evaluation.",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  if (!data.signals.hasOgTags) {
+    findings.push({
+      id: fid(), priority: "later", category: "Trust Signals",
+      issue: "Every share of this product creates a broken first impression",
+      whyItMatters: "When users share this page on LinkedIn, Slack, or in email, it renders as a plain URL with no image or description. The product looks unfinished before the recipient even visits.",
+      suggestedFix: "Add og:title, og:description, and og:image to the page head. This takes 20 minutes and transforms every shared link into a controlled preview of the product.",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  // ── ACCESSIBILITY ────────────────────────────────────────────────────────────
+
+  if (data.images.missingAlt > 5) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Accessibility",
+      issue: `${data.images.missingAlt} of ${data.images.total} images are invisible to users relying on screen readers`,
+      whyItMatters: "Screen readers skip images without alt text entirely. For visually impaired users, these images and any information they carry simply do not exist. This also fails WCAG AA standards.",
+      suggestedFix: `Add descriptive alt text to all ${data.images.missingAlt} images. For content images: describe what the image shows in under 15 words. For decorative images: use alt="". Affected sources: ${data.images.missingAltSamples.slice(0, 2).join(", ")}`,
+      effort: "Medium", impact: "Medium",
+    });
+  } else if (data.images.missingAlt > 0) {
+    findings.push({
+      id: fid(), priority: "important", category: "Accessibility",
+      issue: `${data.images.missingAlt} image${data.images.missingAlt > 1 ? "s are" : " is"} inaccessible to screen reader users`,
+      whyItMatters: "Every image without alt text is a gap in the product experience for users who rely on assistive technology. It also reduces SEO value.",
+      suggestedFix: "Add alt text to each affected image: describe the content or purpose in plain language. For purely decorative images, use alt=\"\".",
+      effort: "Low", impact: "Medium",
+    });
+  }
+
+  // ── MOBILE EXPERIENCE ────────────────────────────────────────────────────────
+
+  if (!data.signals.hasMobileViewport) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Mobile Experience",
+      issue: "The mobile experience is broken at the foundation",
+      whyItMatters: "Without a viewport meta tag, the page renders as a miniaturised desktop layout on mobile. Text is unreadable, navigation is unusable, and CTAs are invisible. Mobile users immediately leave.",
+      suggestedFix: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to the <head>. This single line enables responsive behaviour and is the prerequisite for every other mobile fix.',
+      effort: "Low", impact: "High",
+    });
+  }
+
+  // ── PERFORMANCE PERCEPTION ───────────────────────────────────────────────────
+  // Users judge product quality by how fast it loads.
+
+  if (data.pageSize > 800_000) {
+    findings.push({
+      id: fid(), priority: "urgent", category: "Performance Perception",
+      issue: `Page weight is ${(data.pageSize / 1000).toFixed(0)}KB — users are waiting before seeing any value`,
+      whyItMatters: "A page over 800KB takes 3–5 seconds to load on a typical mobile connection. 53% of mobile users abandon a page that takes more than 3 seconds. Users are forming a negative product impression before the page is even visible.",
+      suggestedFix: "Audit page weight: compress and lazy-load images, remove unused CSS/JS, and defer non-critical scripts. Aim for under 300KB for the initial render. Each second of improvement is a measurable conversion gain.",
+      effort: "High", impact: "High",
+    });
+  } else if (data.pageSize > 400_000) {
+    findings.push({
+      id: fid(), priority: "important", category: "Performance Perception",
+      issue: `Page weight of ${(data.pageSize / 1000).toFixed(0)}KB is creating noticeable load friction`,
+      whyItMatters: "Pages over 400KB take 2+ seconds on mobile. This is below the threshold where users consciously notice the wait, but it measurably increases bounce rate and reduces first impressions.",
+      suggestedFix: "Review page weight: compress images, minimise CSS/JS bundles, and lazy-load content below the fold. Target under 200KB for the initial viewport render.",
+      effort: "Medium", impact: "Medium",
+    });
+  }
+
+  if (data.scripts > 15) {
+    findings.push({
+      id: fid(), priority: "important", category: "Performance Perception",
+      issue: `${data.scripts} scripts are loading — the page feels heavier than it needs to`,
+      whyItMatters: "Each additional script adds a network request and blocks rendering. More than 10 scripts typically means unused analytics, redundant chat widgets, or A/B testing tools that are no longer active. Users experience this as a slow product.",
+      suggestedFix: "Audit every script. Remove tracking tools that are not actively used. Defer or lazy-load non-critical scripts. Consider consolidating third-party tools into a single tag manager.",
+      effort: "Medium", impact: "Medium",
+    });
+  }
+
+  // ── QUALITY RISK ─────────────────────────────────────────────────────────────
+
+  if (!data.signals.hasCanonical) {
+    findings.push({
+      id: fid(), priority: "later", category: "Performance Perception",
+      issue: "This page may be diluting its own search ranking",
+      whyItMatters: "Without a canonical tag, search engines may index multiple versions of the same URL with different parameters. This splits SEO authority across duplicates rather than concentrating it on one page.",
+      suggestedFix: 'Add <link rel="canonical" href="[page URL]"> to the <head> tag. This tells search engines which URL is the authoritative version.',
       effort: "Low", impact: "Low",
     });
   }
 
-  // ── Add URL-signal findings on top of data-driven ones ──────────────────
+  // ── URL-signal findings appended last ─────────────────────────────────────
   const urlBased = getURLSignalFindings(url);
   return [...findings, ...urlBased];
 }
-
 // ── Real audit result from API data ──────────────────────────────────────────
 
 function buildRealAuditResult(data: APIAuditData, url: string): AuditResult {
@@ -858,7 +857,7 @@ function buildRealAuditResult(data: APIAuditData, url: string): AuditResult {
     topUrgentIssue: urgentFindings[0]?.issue ?? "No critical issues detected",
     bestQuickWin: quickWin?.issue ?? "See findings below",
     mainProductRisk:
-      urgentFindings.find((f) => f.category === "Conversion" || f.category === "Product clarity")
+      urgentFindings.find((f) => f.category === "Conversion" || f.category === "Product Clarity")
         ?.issue ??
       urgentFindings[0]?.issue ??
       "Review full findings",
@@ -877,26 +876,25 @@ const P_CONFIG = {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const DEFAULT_CATEGORY_ORDER: Category[] = [
-  "Product clarity",
-  "UX friction",
-  "Mobile responsiveness",
-  "Trust signals",
+  "Product Clarity",
   "Conversion",
+  "User Journey",
+  "UX Friction",
+  "Trust Signals",
+  "Mobile Experience",
   "Accessibility",
-  "QA risk",
-  "AI-builder risk",
+  "Performance Perception",
 ];
 
 const CAT_DOTS: Partial<Record<Category, string>> = {
-  "Product clarity": "bg-blue-400",
-  "UX friction": "bg-amber-400",
-  "Mobile responsiveness": "bg-purple-400",
-  "Trust signals": "bg-green-400",
-  "Conversion": "bg-red-400",
-  "Accessibility": "bg-cyan-400",
-  "QA risk": "bg-orange-400",
-  "AI-builder risk": "bg-pink-400",
-  "Content quality": "bg-zinc-400",
+  "Product Clarity": "bg-blue-400",
+  "Conversion":      "bg-red-400",
+  "User Journey":    "bg-violet-400",
+  "UX Friction":     "bg-amber-400",
+  "Trust Signals":   "bg-green-400",
+  "Mobile Experience": "bg-purple-400",
+  "Accessibility":   "bg-cyan-400",
+  "Performance Perception": "bg-orange-400",
 };
 
 export default function AuditTool() {
@@ -1033,7 +1031,7 @@ export default function AuditTool() {
         mockResult.findings.unshift({
           id: "api-error",
           priority: "important",
-          category: "QA risk",
+          category: "Performance Perception",
           issue: `Live scan failed: ${apiError}`,
           whyItMatters: "The auditor could not fetch this URL — it may block bots, require authentication, or use client-side rendering. Findings below are based on URL pattern heuristics only.",
           suggestedFix: "Try a different URL, or verify the site is publicly accessible without login.",
