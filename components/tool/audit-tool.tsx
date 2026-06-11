@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import {
+  classifySiteContext,
+  SITE_TYPE_LABELS,
+  SITE_TYPE_ICONS,
+  confidenceLabel,
+  type SiteContext,
+  type SiteContextType,
+} from "@/lib/site-context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -583,14 +591,22 @@ interface APIAuditData {
 
 // ── Rule-based findings engine — driven by real API data ─────────────────────
 
-function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFinding[] {
+function generateFindingsFromAPIData(data: APIAuditData, url: string, context: SiteContext): AuditFinding[] {
   _idCounter = 0;
   const findings: AuditFinding[] = [];
+  const siteType: SiteContextType = context.siteType;
+
+  // Suppress irrelevant checks based on site type
+  const skipMarketingChecks = siteType === "internal_tool_or_dashboard" || siteType === "documentation_site";
+  const skipConversionChecks = siteType === "internal_tool_or_dashboard" || siteType === "documentation_site" || siteType === "portfolio_site";
+  const isOfficialSite = siteType === "official_company_site";
+  const isAIBuilt = siteType === "ai_built_site";
+  const strictMode = isAIBuilt; // stricter thresholds
 
   // ── PRODUCT CLARITY ─────────────────────────────────────────────────────────
   // What users see in the first 5 seconds determines whether they stay.
 
-  if (!data.title) {
+  if (!data.title && !skipMarketingChecks) {
     findings.push({
       id: fid(), priority: "urgent", category: "Product Clarity",
       issue: "This product has no name on the page",
@@ -598,9 +614,9 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
       suggestedFix: "Add a <title> tag with the product name and a short value statement. e.g. 'ProductName — [what it does in 5 words]'. Keep it under 60 characters.",
       effort: "Low", impact: "High",
     });
-  } else if (data.title.length < 20) {
+  } else if (data.title.length < 20 && !isOfficialSite && !skipMarketingChecks) {
     findings.push({
-      id: fid(), priority: "urgent", category: "Product Clarity",
+      id: fid(), priority: isAIBuilt ? "urgent" : "important", category: "Product Clarity",
       issue: `The product name is too vague to communicate value: "${data.title}"`,
       whyItMatters: "A title under 20 characters cannot communicate what the product does or who it is for. Users scanning search results will not know why to click.",
       suggestedFix: `Expand the title: "${data.title} — [what it does] for [who]". Make the value visible before the user even clicks.`,
@@ -652,9 +668,9 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
     });
   }
 
-  if (data.wordCount < 80) {
+  if (data.wordCount < 80 && !skipMarketingChecks && !isOfficialSite) {
     findings.push({
-      id: fid(), priority: "important", category: "Product Clarity",
+      id: fid(), priority: isAIBuilt ? "urgent" : "important", category: "Product Clarity",
       issue: "Not enough product story on this page to build conviction",
       whyItMatters: "Fewer than 80 words cannot explain what the product does, who it is for, and why it matters. Users leave when they cannot answer these three questions quickly.",
       suggestedFix: "Add a clear product narrative: the problem, who has it, and how the product solves it. 200–300 words of well-structured copy outperforms any visual on a product page.",
@@ -665,7 +681,7 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
   // ── CONVERSION ───────────────────────────────────────────────────────────────
   // Users who cannot take action are lost.
 
-  if (data.ctaElements.length === 0 && data.buttons.total === 0) {
+  if (!skipConversionChecks && data.ctaElements.length === 0 && data.buttons.total === 0) {
     findings.push({
       id: fid(), priority: "urgent", category: "Conversion",
       issue: "There is no activation path on this page",
@@ -683,9 +699,9 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
     });
   }
 
-  if (!data.signals.hasPricing) {
+  if (!skipConversionChecks && !isOfficialSite && !data.signals.hasPricing) {
     findings.push({
-      id: fid(), priority: "important", category: "Conversion",
+      id: fid(), priority: isAIBuilt ? "urgent" : "important", category: "Conversion",
       issue: "Users cannot self-qualify without pricing visibility",
       whyItMatters: "B2B and SaaS buyers make purchase decisions on their own before ever talking to sales. Hiding pricing forces a sales call that up to 60% of qualified buyers will not book.",
       suggestedFix: "Add a pricing page or at minimum a starting price. If pricing is variable, show a floor ('Starting at $X') or a ROI statement ('Save 10+ hours per week'). Let buyers disqualify themselves.",
@@ -693,9 +709,9 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
     });
   }
 
-  if (!data.signals.hasSignup) {
+  if (!skipConversionChecks && !isOfficialSite && !data.signals.hasSignup) {
     findings.push({
-      id: fid(), priority: "important", category: "Conversion",
+      id: fid(), priority: isAIBuilt ? "urgent" : "important", category: "Conversion",
       issue: "There is no self-service path from interest to activation",
       whyItMatters: "Users who are ready to try the product right now have nowhere to go. Requiring contact with sales adds a 24–72 hour delay to the activation moment — most users don't wait.",
       suggestedFix: "Add a self-service activation path: free trial, demo, sandbox, or waitlist. Show this option prominently. Reduce friction between 'I'm interested' and 'I'm using it'.",
@@ -729,7 +745,7 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
   // ── TRUST SIGNALS ────────────────────────────────────────────────────────────
   // Users buy from products they trust. Trust must be earned early.
 
-  if (!data.signals.hasContact) {
+  if (!data.signals.hasContact && !skipMarketingChecks && !isOfficialSite) {
     findings.push({
       id: fid(), priority: "important", category: "Trust Signals",
       issue: "There is no visible way to reach the team behind this product",
@@ -739,7 +755,7 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
     });
   }
 
-  if (!data.signals.hasOgTags) {
+  if (!data.signals.hasOgTags && !skipMarketingChecks) {
     findings.push({
       id: fid(), priority: "later", category: "Trust Signals",
       issue: "Every share of this product creates a broken first impression",
@@ -830,8 +846,8 @@ function generateFindingsFromAPIData(data: APIAuditData, url: string): AuditFind
 }
 // ── Real audit result from API data ──────────────────────────────────────────
 
-function buildRealAuditResult(data: APIAuditData, url: string): AuditResult {
-  const findings = generateFindingsFromAPIData(data, url);
+function buildRealAuditResult(data: APIAuditData, url: string, context: SiteContext): AuditResult {
+  const findings = generateFindingsFromAPIData(data, url, context);
   const domain = (() => {
     try { return new URL(data.url).hostname.replace("www.", ""); }
     catch { return data.url; }
@@ -843,16 +859,36 @@ function buildRealAuditResult(data: APIAuditData, url: string): AuditResult {
   const urgentFindings = findings.filter((f) => f.priority === "urgent");
   const quickWin = findings.find((f) => f.effort === "Low" && f.impact === "High");
 
-  // Score: start at 85, deduct per urgent/important finding
+  // Context-aware base score:
+  // Official company sites start higher (fewer marketing gaps expected)
+  // AI-built/demo sites start lower (more scrutiny expected)
+  const BASE_SCORES: Partial<Record<SiteContextType, number>> = {
+    official_company_site: 82,
+    ai_built_site: 48,
+    startup_landing_page: 68,
+    portfolio_site: 72,
+    internal_tool_or_dashboard: 70,
+    documentation_site: 74,
+    ecommerce_or_marketplace: 68,
+    unknown: 62,
+  };
+  const baseScore = BASE_SCORES[context.siteType] ?? 65;
+
+  // Deductions also vary: official sites penalised less per issue
+  const urgentDeduction = context.siteType === "official_company_site" ? 4 : context.siteType === "ai_built_site" ? 10 : 7;
+  const importantDeduction = context.siteType === "official_company_site" ? 2 : context.siteType === "ai_built_site" ? 5 : 3;
+
   const score = Math.max(
-    10,
-    85 - urgentFindings.length * 8 - findings.filter((f) => f.priority === "important").length * 4
+    8,
+    baseScore -
+      urgentFindings.length * urgentDeduction -
+      findings.filter((f) => f.priority === "important").length * importantDeduction
   );
 
   return {
     domain,
-    siteType: siteTypeLabel(type, builder),
-    detectedBuilder: builder,
+    siteType: SITE_TYPE_LABELS[context.siteType] ?? siteTypeLabel(type, builder),
+    detectedBuilder: builder ?? context.detectedBuilder,
     overallScore: score,
     topUrgentIssue: urgentFindings[0]?.issue ?? "No critical issues detected",
     bestQuickWin: quickWin?.issue ?? "See findings below",
@@ -902,8 +938,9 @@ export default function AuditTool() {
   const [url, setUrl] = useState("");
   const [stageIndex, setStageIndex] = useState(0);
   const [result, setResult] = useState<AuditResult | null>(null);
-  const [apiData, setApiData] = useState<APIAuditData | null>(null); // real data from API
+  const [apiData, setApiData] = useState<APIAuditData | null>(null);
   const [isRealAudit, setIsRealAudit] = useState(false);
+  const [siteContext, setSiteContext] = useState<SiteContext | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -981,6 +1018,7 @@ export default function AuditTool() {
     setAuditState("loading");
     setApiData(null);
     setIsRealAudit(false);
+    setSiteContext(null);
     setStageIndex(0);
 
     // ── Stage 1: fetch via real API ──────────────────────────────────────────
@@ -1018,15 +1056,57 @@ export default function AuditTool() {
     await new Promise((r) => setTimeout(r, 300));
 
     if (fetchedData) {
-      // ✅ Real data available — use it
+      // ✅ Real data available — classify context and use it
       setApiData(fetchedData);
       setIsRealAudit(true);
-      setResult(buildRealAuditResult(fetchedData, norm));
+
+      let parsedHostname = "";
+      let parsedPath = "";
+      try {
+        const u = new URL(fetchedData.url);
+        parsedHostname = u.hostname;
+        parsedPath = u.pathname;
+      } catch { /* leave empty */ }
+
+      const ctx = classifySiteContext({
+        hostname: parsedHostname,
+        urlPath: parsedPath,
+        title: fetchedData.title,
+        description: fetchedData.description,
+        h1Tags: fetchedData.h1Tags,
+        h2Tags: fetchedData.h2Tags,
+        wordCount: fetchedData.wordCount,
+        buttonCount: fetchedData.buttons.total,
+        formCount: fetchedData.forms.total,
+        linkCount: fetchedData.links.total,
+        hasPricing: fetchedData.signals.hasPricing,
+        hasSignup: fetchedData.signals.hasSignup,
+        hasContact: fetchedData.signals.hasContact,
+        detectedBuilder: detectBuilder(norm),
+      });
+
+      setSiteContext(ctx);
+      setResult(buildRealAuditResult(fetchedData, norm, ctx));
+
     } else {
-      // ⚠️ API failed — fall back to heuristic mock with an error note
+      // ⚠️ API failed — fall back to heuristic mock + URL-based context
       setIsRealAudit(false);
+
+      let parsedHostname = "";
+      let parsedPath = "";
+      try { const u = new URL(norm); parsedHostname = u.hostname; parsedPath = u.pathname; } catch { /* */ }
+
+      const ctx = classifySiteContext({
+        hostname: parsedHostname,
+        urlPath: parsedPath,
+        title: "", description: "", h1Tags: [], h2Tags: [],
+        wordCount: 0, buttonCount: 0, formCount: 0, linkCount: 0,
+        hasPricing: false, hasSignup: false, hasContact: false,
+        detectedBuilder: detectBuilder(norm),
+      });
+      setSiteContext(ctx);
+
       const mockResult = buildAuditResult(norm);
-      // Surface the error message in the findings as a top note
       if (apiError) {
         mockResult.findings.unshift({
           id: "api-error",
@@ -1047,7 +1127,7 @@ export default function AuditTool() {
 
   function reset() {
     setAuditState("idle"); setUrl(""); setResult(null); setApiData(null);
-    setIsRealAudit(false); setError(""); setCopied(false);
+    setIsRealAudit(false); setSiteContext(null); setError(""); setCopied(false);
     setDrawerOpen(false); setSelectedFinding(null);
     setCategoryOrder(DEFAULT_CATEGORY_ORDER);
   }
@@ -1259,6 +1339,9 @@ export default function AuditTool() {
               </button>
             </div>
           </div>
+
+          {/* Context banner */}
+          {siteContext && <ContextBanner context={siteContext} />}
 
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1473,6 +1556,88 @@ export default function AuditTool() {
   }
 
   return null;
+}
+
+// ── Context Banner ────────────────────────────────────────────────────────────
+
+function ContextBanner({ context }: { context: SiteContext }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const ACCENT: Partial<Record<SiteContextType, { border: string; bg: string; badge: string; dot: string }>> = {
+    official_company_site: { border: "border-blue-200",  bg: "bg-blue-50",  badge: "bg-blue-100 text-blue-700 border-blue-200",  dot: "bg-blue-500"  },
+    ai_built_site:         { border: "border-violet-200",bg: "bg-violet-50",badge: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500" },
+    startup_landing_page:  { border: "border-amber-200", bg: "bg-amber-50", badge: "bg-amber-100 text-amber-700 border-amber-200",  dot: "bg-amber-500"  },
+    portfolio_site:        { border: "border-teal-200",  bg: "bg-teal-50",  badge: "bg-teal-100 text-teal-700 border-teal-200",    dot: "bg-teal-500"   },
+    documentation_site:    { border: "border-zinc-200",  bg: "bg-zinc-50",  badge: "bg-zinc-100 text-zinc-600 border-zinc-200",     dot: "bg-zinc-500"   },
+    internal_tool_or_dashboard: { border: "border-zinc-200", bg: "bg-zinc-50", badge: "bg-zinc-100 text-zinc-600 border-zinc-200", dot: "bg-zinc-500" },
+    ecommerce_or_marketplace:   { border: "border-green-200", bg: "bg-green-50", badge: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
+    unknown: { border: "border-zinc-200", bg: "bg-zinc-50", badge: "bg-zinc-100 text-zinc-500 border-zinc-200", dot: "bg-zinc-400" },
+  };
+
+  const a = ACCENT[context.siteType] ?? ACCENT.unknown!;
+  const label = SITE_TYPE_LABELS[context.siteType];
+  const icon = SITE_TYPE_ICONS[context.siteType];
+  const conf = confidenceLabel(context.confidence);
+
+  return (
+    <div className={`overflow-hidden rounded-xl border ${a.border} ${a.bg}`}>
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        aria-expanded={expanded}
+      >
+        <span className="text-base leading-none">{icon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] font-semibold ${a.badge}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${a.dot}`} />
+              {label}
+            </span>
+            <span className="font-mono text-[10px] text-zinc-500">
+              {conf} confidence · {Math.round(context.confidence * 100)}%
+            </span>
+            {context.detectedBuilder && (
+              <span className="font-mono text-[10px] text-zinc-400">
+                Builder: {context.detectedBuilder}
+              </span>
+            )}
+          </div>
+          {!expanded && (
+            <p className="mt-0.5 truncate text-xs text-zinc-500">{context.auditNote}</p>
+          )}
+        </div>
+        <svg
+          width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          strokeWidth={2} className={`shrink-0 text-zinc-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-current/10 px-4 pb-4 pt-3">
+          <p className="mb-3 text-xs leading-relaxed text-zinc-600">{context.auditNote}</p>
+          {context.reasons.length > 0 && (
+            <div>
+              <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                Why this classification
+              </p>
+              <ul className="space-y-1">
+                {context.reasons.map((r, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-zinc-600">
+                    <span className="mt-1 shrink-0 text-zinc-400">→</span>
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
