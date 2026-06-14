@@ -26,7 +26,7 @@ type Category =
   | "Performance Perception";
 type Effort = "Low" | "Medium" | "High";
 type Impact = "Low" | "Medium" | "High";
-type ToolId = "lovable" | "base44" | "claude" | "generic";
+type ToolId = "lovable" | "base44" | "claude" | "cursor";
 
 interface AuditFinding {
   id: string;
@@ -56,7 +56,7 @@ const TOOL_LABELS: Record<ToolId, string> = {
   lovable: "Lovable",
   base44: "Base44",
   claude: "Claude",
-  generic: "Generic AI Builder",
+  cursor: "Cursor",
 };
 
 const LOADING_STAGES = [
@@ -80,51 +80,73 @@ const CATEGORY_CONTEXT: Record<Category, string> = {
 };
 
 const TOOL_CONSTRAINTS: Record<ToolId, string> = {
-  lovable: "Keep the existing visual style, component structure, and design system. Do not redesign unrelated sections or change the colour palette.",
-  base44: "Preserve the existing data model, API connections, and business logic. Only update the UI and UX layer. Do not break existing database schemas.",
-  claude: "Do not refactor unrelated components. Ensure all changes are responsive — test at 375px, 768px, and 1280px. Write clean TypeScript. Do not change routing or auth logic.",
-  generic: "Maintain consistency with the existing design system. Do not change backend logic, data models, or unrelated functionality. Only fix what is described.",
+  lovable: "Preserve the existing visual style, component structure, and design system. Do not redesign unrelated sections, change the colour palette, or modify components not involved in this fix.",
+  base44: "Preserve the existing data model, API connections, and all business logic. Update only the UI and UX layer. Do not modify database schemas, backend logic, or existing routes.",
+  claude: "Do not refactor unrelated components or files. Write clean TypeScript — no any types. Ensure changes are responsive at 375px, 768px, and 1280px. Do not change routing or auth logic.",
+  cursor: "Use the existing code conventions, file structure, and naming patterns. Do not create new files unless strictly necessary. Only edit the files directly involved in this fix.",
 };
 
 function buildFixPrompts(finding: AuditFinding, detectedBuilder: string | null): FixPrompts {
-  const { issue, category, suggestedFix, priority } = finding;
-  const urgency = priority === "urgent" ? "This is a critical issue that directly impacts users. " : "";
+  const { issue, category, suggestedFix, whyItMatters, priority } = finding;
+  const isUrgent = priority === "urgent";
   const context = CATEGORY_CONTEXT[category];
 
   const prompts: FixPrompts = {} as FixPrompts;
 
-  (["lovable", "base44", "claude", "generic"] as ToolId[]).forEach((tool) => {
-    const toolName = TOOL_LABELS[tool];
+  (["lovable", "base44", "claude", "cursor"] as ToolId[]).forEach((tool) => {
     const constraint = TOOL_CONSTRAINTS[tool];
 
-    let prefix = "";
+    // Opener — personalised to detected builder where relevant
+    let opener = "";
     if (tool === "lovable") {
-      prefix = detectedBuilder === "Lovable"
-        ? "In this Lovable project, "
-        : "Open this project in Lovable. ";
+      opener = detectedBuilder === "Lovable"
+        ? "You are working on this Lovable project. Fix one specific issue — nothing else."
+        : "Open this project in Lovable. Fix one specific issue — nothing else.";
     } else if (tool === "base44") {
-      prefix = detectedBuilder === "Base44"
-        ? "In this Base44 app, "
-        : "In Base44, ";
+      opener = detectedBuilder === "Base44"
+        ? "You are working on this Base44 app. Fix one specific issue — nothing else."
+        : "Open this project in Base44. Fix one specific issue — nothing else.";
     } else if (tool === "claude") {
-      prefix = "Using Claude with access to the codebase, ";
+      opener = "You have access to the full codebase. Fix one specific issue — nothing else.";
     } else {
-      prefix = "In your AI builder, ";
+      opener = "You have access to the full codebase in Cursor. Fix one specific issue — nothing else.";
     }
 
-    prompts[tool] = `${prefix}fix the following issue: "${issue}"
+    // Priority signal
+    const urgencyLine = isUrgent
+      ? "⚠ This is a critical issue. It directly impacts user experience or conversion."
+      : "";
 
-${urgency}${context}
+    prompts[tool] = `${opener}
+${urgencyLine ? "\n" + urgencyLine + "\n" : ""}
+---
 
-What to fix:
+Issue to fix:
+"${issue}"
+
+Why this matters:
+${whyItMatters}
+
+Category context (${category}):
+${context}
+
+---
+
+What to do:
 ${suggestedFix}
 
-Implementation notes:
-- Make this the only change in this session
-- Verify the fix works on mobile (375px) and desktop
-- ${constraint}
+---
 
-After applying: confirm the issue described above is resolved before closing the session.`;
+Constraints:
+- This is a single-issue session. Change only what is described above.
+- ${constraint}
+- After applying the fix, test at 375px (mobile) and 1280px (desktop).
+- Confirm the issue above is resolved before ending the session.
+
+Do not:
+- Redesign or refactor unrelated components
+- Add new features, pages, or navigation items
+- Change auth logic, routing, or the database schema`;
   });
 
   return prompts;
@@ -1134,8 +1156,13 @@ export default function AuditTool() {
 
   function openDrawer(finding: AuditFinding) {
     setSelectedFinding(finding);
-    setActiveTab(result?.detectedBuilder?.toLowerCase() === "lovable" ? "lovable" :
-      result?.detectedBuilder?.toLowerCase() === "base44" ? "base44" : "lovable");
+    const b = (result?.detectedBuilder ?? "").toLowerCase();
+    let defaultTab: ToolId = "claude"; // sensible fallback for unknown or no builder
+    if (b.includes("lovable")) defaultTab = "lovable";
+    else if (b.includes("base44")) defaultTab = "base44";
+    else if (b.includes("cursor")) defaultTab = "cursor";
+    // bolt, v0, replit → show claude (code-level fix)
+    setActiveTab(defaultTab);
     setDrawerOpen(true);
     setCopiedPrompt(null);
   }
@@ -1450,33 +1477,41 @@ export default function AuditTool() {
         </div>
 
         {/* ── Fix Prompt Drawer ─────────────────────────────────────────────── */}
-        {drawerOpen && (
-          <div className="fixed inset-0 z-50 flex" onClick={(e) => { if (e.target === e.currentTarget) setDrawerOpen(false); }}>
+        {drawerOpen && selectedFinding && fixPrompts && (
+          <div
+            className="fixed inset-0 z-50 flex"
+            onClick={(e) => { if (e.target === e.currentTarget) setDrawerOpen(false); }}
+          >
             {/* Backdrop */}
-            <div
-              className="flex-1 bg-black/50"
-              onClick={() => setDrawerOpen(false)}
-            />
+            <div className="flex-1 bg-black/60 backdrop-blur-[2px]" onClick={() => setDrawerOpen(false)} />
 
-            {/* Panel — bottom sheet on mobile, right side on lg+ */}
+            {/* Panel — bottom sheet on mobile, right-side panel on lg+ */}
             <div className="
               fixed bottom-0 left-0 right-0 z-50
-              flex max-h-[85vh] flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl
-              transition-transform duration-300
-              lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:max-h-none lg:w-[440px] lg:rounded-none lg:rounded-l-xl
+              flex max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-zinc-950 shadow-2xl
+              lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:max-h-none lg:w-[480px] lg:rounded-none lg:rounded-l-2xl
             ">
 
-              {/* Drawer header */}
-              <div className="flex shrink-0 items-start justify-between border-b border-zinc-100 p-5">
-                <div className="min-w-0 mr-3">
-                  <p className="mb-1 font-mono text-xs font-semibold uppercase tracking-widest text-zinc-400">Fix prompt</p>
-                  <p className="text-sm font-semibold leading-snug text-zinc-900 line-clamp-2">
-                    {selectedFinding?.issue}
+              {/* ── Header ─────────────────────────────────────────────────────── */}
+              <div className="flex shrink-0 items-start justify-between border-b border-zinc-800 px-5 py-4">
+                <div className="min-w-0 mr-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                      Fix prompt
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] font-semibold ${P_CONFIG[selectedFinding.priority].badge}`}>
+                      <span className={`h-1 w-1 rounded-full ${P_CONFIG[selectedFinding.priority].dot}`} />
+                      {P_CONFIG[selectedFinding.priority].label}
+                    </span>
+                    <span className="font-mono text-[10px] text-zinc-600">{selectedFinding.category}</span>
+                  </div>
+                  <p className="text-sm font-semibold leading-snug text-white line-clamp-3">
+                    {selectedFinding.issue}
                   </p>
                 </div>
                 <button
                   onClick={() => setDrawerOpen(false)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-400 hover:text-zinc-700 transition-colors"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700 text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white"
                   aria-label="Close"
                 >
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1485,67 +1520,117 @@ export default function AuditTool() {
                 </button>
               </div>
 
-              {/* Tool tabs */}
-              <div className="flex shrink-0 border-b border-zinc-100 px-5 gap-1">
-                {(["lovable", "base44", "claude", "generic"] as ToolId[]).map((tool) => (
-                  <button
-                    key={tool}
-                    onClick={() => setActiveTab(tool)}
-                    className={`px-3 py-3 font-mono text-xs font-semibold transition-colors border-b-2 -mb-px ${
-                      activeTab === tool
-                        ? "border-zinc-900 text-zinc-900"
-                        : "border-transparent text-zinc-400 hover:text-zinc-600"
-                    }`}
-                  >
-                    {TOOL_LABELS[tool].split(" ")[0]}
-                  </button>
-                ))}
+              {/* ── Detected builder callout ──────────────────────────────────── */}
+              {result?.detectedBuilder && (
+                <div className="shrink-0 border-b border-zinc-800 bg-violet-950/60 px-5 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm leading-none">⚡</span>
+                    <p className="text-xs text-violet-300">
+                      <span className="font-semibold text-violet-100">Detected: {result.detectedBuilder}</span>
+                      {" "}— prompt tailored for this builder
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Tabs ─────────────────────────────────────────────────────── */}
+              <div className="flex shrink-0 border-b border-zinc-800 px-4 pt-1">
+                {(["lovable", "base44", "claude", "cursor"] as ToolId[]).map((tool) => {
+                  const isDetected = result?.detectedBuilder?.toLowerCase().includes(tool);
+                  return (
+                    <button
+                      key={tool}
+                      onClick={() => setActiveTab(tool)}
+                      className={`relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 font-mono text-xs font-semibold transition-colors ${
+                        activeTab === tool
+                          ? "border-white text-white"
+                          : "border-transparent text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {TOOL_LABELS[tool]}
+                      {isDetected && (
+                        <span className="rounded-full bg-violet-500 px-1.5 py-px font-mono text-[8px] font-bold leading-none text-white">
+                          ★
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Prompt content */}
-              <div className="flex-1 overflow-y-auto p-5">
-                {fixPrompts && (
-                  <>
-                    {/* Tool context */}
-                    <div className="mb-4 rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
-                      <p className="text-xs text-zinc-500">
-                        <span className="font-medium text-zinc-700">{TOOL_LABELS[activeTab]}</span>
-                        {activeTab === "lovable" && " — optimised for visual/design changes"}
-                        {activeTab === "base44" && " — optimised for app logic and data model"}
-                        {activeTab === "claude" && " — optimised for code-level changes"}
-                        {activeTab === "generic" && " — works with any AI builder"}
-                      </p>
-                    </div>
+              {/* ── Prompt content ───────────────────────────────────────────── */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="space-y-4 p-5">
 
-                    {/* Prompt text */}
-                    <div className="rounded-lg border border-zinc-200 bg-white">
-                      <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
-                        <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
-                          Prompt
-                        </span>
-                        <button
-                          onClick={() => copyPrompt(activeTab, fixPrompts[activeTab])}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold transition-colors ${
-                            copiedPrompt === activeTab
-                              ? "bg-green-100 text-green-700"
-                              : "bg-zinc-900 text-white hover:bg-zinc-700"
-                          }`}
-                        >
-                          {copiedPrompt === activeTab ? "✓ Copied" : "Copy"}
-                        </button>
-                      </div>
-                      <div className="p-4">
-                        <p className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-700">
-                          {fixPrompts[activeTab]}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="mt-4 text-xs text-zinc-400">
-                      Paste this prompt directly into your AI builder. Run it as a focused, single-issue session.
+                  {/* Tool description chip */}
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3">
+                    <p className="text-xs leading-relaxed text-zinc-400">
+                      <span className="font-semibold text-zinc-200">{TOOL_LABELS[activeTab]}</span>
+                      {activeTab === "lovable" && " — prompt optimised for visual and design-layer fixes without touching app logic"}
+                      {activeTab === "base44" && " — prompt preserves data model and business logic while correcting the UX issue"}
+                      {activeTab === "claude" && " — full code-level fix with responsive testing and TypeScript compliance guardrails"}
+                      {activeTab === "cursor" && " — in-editor fix using the existing file structure and code conventions"}
                     </p>
-                  </>
-                )}
+                  </div>
+
+                  {/* Prompt block — code editor style */}
+                  <div className="overflow-hidden rounded-xl border border-zinc-800">
+                    {/* Editor chrome */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex gap-1.5">
+                          <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                          <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                          <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                        </div>
+                        <span className="font-mono text-[10px] text-zinc-600">
+                          fix-prompt-{activeTab}.txt
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => copyPrompt(activeTab, fixPrompts[activeTab])}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold transition-all duration-150 ${
+                          copiedPrompt === activeTab
+                            ? "bg-green-900/70 text-green-400 ring-1 ring-green-700"
+                            : "bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95"
+                        }`}
+                      >
+                        {copiedPrompt === activeTab ? (
+                          <>
+                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                            </svg>
+                            Copy prompt
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {/* Prompt text */}
+                    <div className="bg-zinc-950 p-5">
+                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-300">
+                        {fixPrompts[activeTab]}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Footer tip */}
+                  <div className="flex items-start gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+                    <span className="mt-0.5 shrink-0 text-sm leading-none">💡</span>
+                    <p className="text-xs leading-relaxed text-zinc-500">
+                      Paste into <span className="text-zinc-300">{TOOL_LABELS[activeTab]}</span> as a focused, single-issue session.
+                      One fix per prompt produces significantly better results than batching multiple issues.
+                    </p>
+                  </div>
+
+                </div>
               </div>
 
             </div>
