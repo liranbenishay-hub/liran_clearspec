@@ -1677,13 +1677,33 @@ export default function AuditTool() {
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [evidenceFinding, setEvidenceFinding] = useState<AuditFinding | null>(null);
 
+  // Screenshot state — captured asynchronously after audit completes
+  const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
+  const [screenshotMeta, setScreenshotMeta] = useState<{
+    capturedAt: string;
+    viewport: string;
+    durationMs: number;
+  } | null>(null);
+  const [screenshotModalOpen, setScreenshotModalOpen] = useState(false);
+
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (drawerOpen || evidenceDrawerOpen) document.body.style.overflow = "hidden";
+    if (drawerOpen || evidenceDrawerOpen || screenshotModalOpen) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
     return () => { document.body.style.overflow = ""; };
-  }, [drawerOpen, evidenceDrawerOpen]);
+  }, [drawerOpen, evidenceDrawerOpen, screenshotModalOpen]);
+
+  // Esc closes screenshot modal
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setScreenshotModalOpen(false);
+    }
+    if (screenshotModalOpen) window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [screenshotModalOpen]);
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
   function handleDragStart(e: React.DragEvent, idx: number) {
@@ -1845,6 +1865,48 @@ export default function AuditTool() {
 
     setAuditState("results");
     setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+
+    // Kick off screenshot capture asynchronously — audit results appear immediately
+    // while the screenshot loads in the background.
+    captureScreenshot(norm);
+  }
+
+  /** Async screenshot fetch — fires after audit results are shown */
+  async function captureScreenshot(targetUrl: string) {
+    setScreenshotLoading(true);
+    setScreenshotBase64(null);
+    setScreenshotError(null);
+    try {
+      const res = await fetch("/api/screenshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: targetUrl }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json() as {
+        screenshotBase64?: string;
+        capturedAt?: string;
+        viewport?: string;
+        durationMs?: number;
+      };
+      if (data.screenshotBase64) {
+        setScreenshotBase64(data.screenshotBase64);
+        setScreenshotMeta({
+          capturedAt: data.capturedAt ?? new Date().toISOString(),
+          viewport: data.viewport ?? "desktop",
+          durationMs: data.durationMs ?? 0,
+        });
+      } else {
+        throw new Error("No screenshot data returned");
+      }
+    } catch (err) {
+      setScreenshotError(err instanceof Error ? err.message : "Screenshot unavailable");
+    } finally {
+      setScreenshotLoading(false);
+    }
   }
 
   function reset() {
@@ -1853,6 +1915,8 @@ export default function AuditTool() {
     setDrawerOpen(false); setSelectedFinding(null);
     setEvidenceDrawerOpen(false); setEvidenceFinding(null);
     setCategoryOrder(DEFAULT_CATEGORY_ORDER);
+    setScreenshotBase64(null); setScreenshotLoading(false); setScreenshotError(null);
+    setScreenshotMeta(null); setScreenshotModalOpen(false);
   }
 
   function openDrawer(finding: AuditFinding) {
@@ -2085,31 +2149,120 @@ export default function AuditTool() {
 
           {/* ── Page Snapshot ──────────────────────────────────────────────── */}
           <div className="overflow-hidden rounded-xl border border-zinc-200">
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500 shrink-0">
                   Page Snapshot
                 </span>
                 <span className="rounded border border-zinc-200 bg-white px-2 py-0.5 font-mono text-[9px] text-zinc-500 truncate max-w-[280px]">
                   {url}
                 </span>
               </div>
-              <span className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 font-mono text-[9px] text-zinc-400">
-                coming next
-              </span>
+              {screenshotLoading && (
+                <span className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                  <span className="inline-block h-1.5 w-1.5 animate-ping rounded-full bg-zinc-400" />
+                  Capturing…
+                </span>
+              )}
+              {screenshotBase64 && !screenshotLoading && (
+                <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 font-mono text-[9px] font-semibold text-green-700">
+                  ✓ Live screenshot
+                </span>
+              )}
+              {(screenshotError || (!screenshotLoading && !screenshotBase64)) && !screenshotLoading && (
+                <span className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 font-mono text-[9px] text-zinc-400">
+                  HTML signals only
+                </span>
+              )}
             </div>
 
-            {result.screenshotUrl ? (
-              /* Future: render screenshot here */
-              <div className="flex items-center justify-center bg-zinc-50 p-4">
-                <img src={result.screenshotUrl} alt={`Screenshot of ${result.domain}`} className="rounded-lg border border-zinc-200 shadow-sm max-h-48 object-cover" />
-              </div>
-            ) : (
+            {/* ── State 1: loading ─────────────────────────────────────────── */}
+            {screenshotLoading && (
               <div className="flex items-center gap-4 bg-white px-4 py-4">
-                {/* Visual stub */}
+                <div className="shrink-0 flex h-20 w-32 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50">
+                  <div className="space-y-1.5 w-20">
+                    <div className="h-2 rounded bg-zinc-200 animate-pulse" />
+                    <div className="h-2 rounded bg-zinc-200 animate-pulse w-4/5" />
+                    <div className="h-2 rounded bg-zinc-200 animate-pulse w-3/5" />
+                    <div className="h-2 rounded bg-zinc-200 animate-pulse w-4/5" />
+                    <div className="h-2 rounded bg-zinc-200 animate-pulse w-2/5" />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-zinc-700">Capturing screenshot…</p>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    Launching browser and rendering the page. This takes 5–20 seconds, especially on first run.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ── State 2: screenshot ready ─────────────────────────────────── */}
+            {screenshotBase64 && !screenshotLoading && (
+              <div className="bg-zinc-950">
+                {/* Browser chrome */}
+                <div className="flex items-center gap-1.5 px-3 pt-3 pb-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                  <span className="ml-2 flex-1 rounded bg-zinc-800 px-3 py-0.5 font-mono text-[9px] text-zinc-500 truncate">
+                    {url}
+                  </span>
+                </div>
+
+                {/* Clickable screenshot */}
+                <div
+                  className="group relative mx-3 cursor-zoom-in overflow-hidden rounded-md border border-zinc-800"
+                  onClick={() => setScreenshotModalOpen(true)}
+                  title="Click to enlarge"
+                >
+                  <img
+                    src={`data:image/jpeg;base64,${screenshotBase64}`}
+                    alt={`Screenshot of ${result.domain}`}
+                    className="w-full object-cover object-top transition-transform duration-200 group-hover:scale-[1.01]"
+                    style={{ maxHeight: "300px" }}
+                  />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-150 group-hover:bg-black/30">
+                    <div className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/60 px-3 py-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        <line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
+                      </svg>
+                      <span className="font-mono text-[10px] font-semibold text-white">Enlarge</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metadata footer */}
+                <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-2">
+                  {screenshotMeta && (
+                    <>
+                      <span className="font-mono text-[9px] text-zinc-500">
+                        🖥 {screenshotMeta.viewport} · 1280×800
+                      </span>
+                      <span className="font-mono text-[9px] text-zinc-600">·</span>
+                      <span className="font-mono text-[9px] text-zinc-500">
+                        Captured {new Date(screenshotMeta.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                      <span className="font-mono text-[9px] text-zinc-600">·</span>
+                      <span className="font-mono text-[9px] text-zinc-500">
+                        {(screenshotMeta.durationMs / 1000).toFixed(1)}s
+                      </span>
+                    </>
+                  )}
+                  <span className="ml-auto font-mono text-[9px] text-zinc-600">click to enlarge</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── State 3: error / no screenshot ───────────────────────────── */}
+            {!screenshotLoading && !screenshotBase64 && (
+              <div className="flex items-center gap-4 bg-white px-4 py-4">
                 <div className="shrink-0 flex h-20 w-32 items-center justify-center rounded-lg border-2 border-dashed border-zinc-200 bg-zinc-50">
                   <div className="text-center">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-1 text-zinc-300" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-1 text-zinc-300" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="3" width="18" height="18" rx="2" />
                       <circle cx="8.5" cy="8.5" r="1.5" />
                       <polyline points="21 15 16 10 5 21" />
@@ -2117,31 +2270,42 @@ export default function AuditTool() {
                     <p className="font-mono text-[8px] text-zinc-300">No screenshot</p>
                   </div>
                 </div>
-                {/* Explanation */}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-700">Screenshot capture coming next</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
-                    This audit is currently based on live HTML and page signals — title, structure, links, images, and load data fetched directly from the page.
-                    Visual screenshots will be added in the next release.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {apiData && (
-                      <>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
-                          <span className="h-1 w-1 rounded-full bg-green-400" />
-                          {apiData.wordCount} words extracted
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
-                          <span className="h-1 w-1 rounded-full bg-green-400" />
-                          {(apiData.pageSize / 1000).toFixed(0)}KB page size
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
-                          <span className="h-1 w-1 rounded-full bg-green-400" />
-                          {apiData.links.total} links mapped
-                        </span>
-                      </>
-                    )}
-                  </div>
+                  {screenshotError ? (
+                    <>
+                      <p className="text-sm font-semibold text-zinc-700">Screenshot unavailable</p>
+                      <p className="mt-0.5 text-xs text-zinc-400">
+                        {screenshotError.includes("timeout") || screenshotError.includes("Timeout")
+                          ? "The browser timed out rendering this page. The audit data below is still accurate."
+                          : "Could not capture a visual screenshot. The audit data below is still accurate."}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-zinc-700">Audit based on live HTML signals</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
+                        Title, structure, links, images, and load data were fetched directly from the page.
+                        Visual screenshots load after the audit completes.
+                      </p>
+                    </>
+                  )}
+                  {/* Live data chips */}
+                  {apiData && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                        <span className="h-1 w-1 rounded-full bg-green-400" />
+                        {apiData.wordCount} words
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                        <span className="h-1 w-1 rounded-full bg-green-400" />
+                        {(apiData.pageSize / 1000).toFixed(0)}KB
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                        <span className="h-1 w-1 rounded-full bg-green-400" />
+                        {apiData.links.total} links
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2451,6 +2615,59 @@ export default function AuditTool() {
             </div>
           );
         })()}
+
+        {/* ── Screenshot Modal ─────────────────────────────────────────────── */}
+        {screenshotModalOpen && screenshotBase64 && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4"
+            onClick={() => setScreenshotModalOpen(false)}
+          >
+            <div
+              className="relative max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal browser chrome */}
+              <div className="flex items-center gap-1.5 bg-zinc-950 px-4 py-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                <span className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                <span className="ml-2 flex-1 rounded bg-zinc-800 px-3 py-0.5 font-mono text-[9px] text-zinc-400 truncate">
+                  {url}
+                </span>
+                <button
+                  onClick={() => setScreenshotModalOpen(false)}
+                  className="ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                  aria-label="Close"
+                >
+                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Full screenshot */}
+              <div className="overflow-auto bg-zinc-950" style={{ maxHeight: "calc(90vh - 80px)" }}>
+                <img
+                  src={`data:image/jpeg;base64,${screenshotBase64}`}
+                  alt={`Full screenshot of ${result.domain}`}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Modal footer */}
+              {screenshotMeta && (
+                <div className="flex items-center gap-4 bg-zinc-950 px-4 py-2 border-t border-zinc-800">
+                  <span className="font-mono text-[9px] text-zinc-500">🖥 {screenshotMeta.viewport} · 1280×800</span>
+                  <span className="font-mono text-[9px] text-zinc-500">
+                    Captured {new Date(screenshotMeta.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  </span>
+                  <span className="font-mono text-[9px] text-zinc-500">{(screenshotMeta.durationMs / 1000).toFixed(1)}s render</span>
+                  <span className="ml-auto font-mono text-[9px] text-zinc-600">Esc or click outside to close</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Evidence Drawer ───────────────────────────────────────────────── */}
         {evidenceDrawerOpen && evidenceFinding && (() => {
