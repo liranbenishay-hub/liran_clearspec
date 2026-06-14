@@ -26,7 +26,7 @@ type Category =
   | "Performance Perception";
 type Effort = "Low" | "Medium" | "High";
 type Impact = "Low" | "Medium" | "High";
-type ToolId = "lovable" | "base44" | "claude" | "cursor";
+type ToolId = "lovable" | "base44" | "claude" | "cursor" | "generic";
 
 interface AuditFinding {
   id: string;
@@ -57,6 +57,40 @@ const TOOL_LABELS: Record<ToolId, string> = {
   base44: "Base44",
   claude: "Claude",
   cursor: "Cursor",
+  generic: "Generic",
+};
+
+/** One-line descriptions shown under the tab name in the drawer */
+const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
+  lovable: "Visual/chat editor — page-layer changes only, no backend logic touched",
+  base44: "App builder — preserves data model, collections, and workflows",
+  claude: "Code-level fix with TypeScript safety, responsive check, and build validation",
+  cursor: "IDE-native — codebase search, diff preview, file-scoped changes only",
+  generic: "Tool-agnostic — works with any AI builder or assistant",
+};
+
+/** Returns the recommended ToolId tab for a detected builder string */
+function getRecommendedTab(detectedBuilder: string | null): ToolId | null {
+  if (!detectedBuilder) return null;
+  const b = detectedBuilder.toLowerCase();
+  if (b.includes("lovable")) return "lovable";
+  if (b.includes("base44")) return "base44";
+  if (b.includes("cursor")) return "cursor";
+  // v0 generates Next.js/React code → Claude is the closest match
+  if (b.includes("v0") || b.includes("vercel v0")) return "claude";
+  // Bolt, Replit, StackBlitz → code output → Claude
+  if (b.includes("bolt") || b.includes("replit") || b.includes("stackblitz")) return "claude";
+  // Builder detected but unknown — generic is safest
+  return "generic";
+}
+
+/** Tooltip copy for each recommended tab explaining why it was selected */
+const RECOMMENDED_TOOLTIP: Record<ToolId, string> = {
+  lovable: "This site appears to be built with Lovable. This prompt uses Lovable's visual editor conventions and prevents accidental changes to app logic.",
+  base44: "This site appears to be built with Base44. This prompt preserves your data model and workflows while fixing only the UI layer.",
+  claude: "The detected builder generates code-first output. This prompt is optimised for code-level implementation with TypeScript and responsive verification.",
+  cursor: "Cursor detected. This prompt uses in-editor conventions — codebase search, diff review, and file-scoped changes.",
+  generic: "Builder detected but no specific tab matches. This generic prompt works with any AI builder or assistant.",
 };
 
 const LOADING_STAGES = [
@@ -84,70 +118,215 @@ const TOOL_CONSTRAINTS: Record<ToolId, string> = {
   base44: "Preserve the existing data model, API connections, and all business logic. Update only the UI and UX layer. Do not modify database schemas, backend logic, or existing routes.",
   claude: "Do not refactor unrelated components or files. Write clean TypeScript — no any types. Ensure changes are responsive at 375px, 768px, and 1280px. Do not change routing or auth logic.",
   cursor: "Use the existing code conventions, file structure, and naming patterns. Do not create new files unless strictly necessary. Only edit the files directly involved in this fix.",
+  generic: "Fix only what is described. Do not change unrelated sections, authentication, database logic, or any component outside the scope of this issue.",
 };
 
 function buildFixPrompts(finding: AuditFinding, detectedBuilder: string | null): FixPrompts {
   const { issue, category, suggestedFix, whyItMatters, priority } = finding;
   const isUrgent = priority === "urgent";
   const context = CATEGORY_CONTEXT[category];
+  const urgencyFlag = isUrgent ? "\n⚠  CRITICAL — this issue directly impacts user experience or conversion.\n" : "";
 
   const prompts: FixPrompts = {} as FixPrompts;
 
-  (["lovable", "base44", "claude", "cursor"] as ToolId[]).forEach((tool) => {
-    const constraint = TOOL_CONSTRAINTS[tool];
-
-    // Opener — personalised to detected builder where relevant
-    let opener = "";
-    if (tool === "lovable") {
-      opener = detectedBuilder === "Lovable"
-        ? "You are working on this Lovable project. Fix one specific issue — nothing else."
-        : "Open this project in Lovable. Fix one specific issue — nothing else.";
-    } else if (tool === "base44") {
-      opener = detectedBuilder === "Base44"
-        ? "You are working on this Base44 app. Fix one specific issue — nothing else."
-        : "Open this project in Base44. Fix one specific issue — nothing else.";
-    } else if (tool === "claude") {
-      opener = "You have access to the full codebase. Fix one specific issue — nothing else.";
-    } else {
-      opener = "You have access to the full codebase in Cursor. Fix one specific issue — nothing else.";
-    }
-
-    // Priority signal
-    const urgencyLine = isUrgent
-      ? "⚠ This is a critical issue. It directly impacts user experience or conversion."
-      : "";
-
-    prompts[tool] = `${opener}
-${urgencyLine ? "\n" + urgencyLine + "\n" : ""}
----
-
-Issue to fix:
+  // ── LOVABLE ──────────────────────────────────────────────────────────────────
+  // Workflow: visual/chat editor, page-layer only, no backend changes
+  prompts.lovable = `You are editing this Lovable project using the chat interface.
+Fix one specific product issue. Do not touch anything else.
+${urgencyFlag}
+ISSUE TO FIX
+Category: ${category} · Priority: ${priority.toUpperCase()}
 "${issue}"
 
-Why this matters:
+WHY THIS MATTERS
 ${whyItMatters}
 
-Category context (${category}):
-${context}
-
----
-
-What to do:
+WHAT TO CHANGE
 ${suggestedFix}
 
----
+HOW TO DO IT IN LOVABLE
+• Use the Lovable chat to describe the visual change — do not manually edit code unless necessary.
+• Target only the specific section, component, or copy described above.
+• Keep the existing layout, color palette, typography, and component structure intact.
+• If adjusting a CTA, heading, or copy block: update the text and visual treatment only.
+• If adjusting spacing or responsiveness: use Tailwind utility classes that already exist in the project.
+• Test the fix in the Lovable preview at both mobile and desktop sizes before publishing.
 
-Constraints:
-- This is a single-issue session. Change only what is described above.
-- ${constraint}
-- After applying the fix, test at 375px (mobile) and 1280px (desktop).
-- Confirm the issue above is resolved before ending the session.
+DO NOT CHANGE
+• Any React hooks, API calls, Supabase queries, or authentication logic
+• Backend routes, serverless functions, or data-fetching logic
+• Other pages or components not directly related to this issue
+• Navigation structure, routing, or app-level layout
 
-Do not:
-- Redesign or refactor unrelated components
-- Add new features, pages, or navigation items
-- Change auth logic, routing, or the database schema`;
-  });
+ACCEPTANCE CRITERIA
+The issue above is visually resolved in the Lovable preview.
+The fix works at 375px (mobile) and 1280px (desktop).
+No app logic, data connections, or unrelated sections have changed.`;
+
+  // ── BASE44 ───────────────────────────────────────────────────────────────────
+  // Workflow: app builder with visual data model — UX changes only, data layer untouched
+  prompts.base44 = `You are editing this Base44 app.
+Fix one specific UX issue. The data model and business logic must remain completely untouched.
+${urgencyFlag}
+ISSUE TO FIX
+Category: ${category} · Priority: ${priority.toUpperCase()}
+"${issue}"
+
+WHY THIS MATTERS
+${whyItMatters}
+
+WHAT TO CHANGE
+${suggestedFix}
+
+HOW TO DO IT IN BASE44
+• Navigate to the specific screen or component where this issue appears.
+• Make only UI-level changes: copy text, component visibility, labels, layout, or UX flow.
+• If adding a new UI element is required, add it to the relevant screen only — not globally.
+• After editing, preview the screen as a standard user (not as admin) to confirm the fix works.
+• If the fix requires showing or hiding a field: use visibility conditions, not data model changes.
+
+DO NOT CHANGE
+• Collections, data models, field definitions, or relationships
+• Existing workflows, automation rules, triggers, or formula columns
+• User roles, permissions, access control settings, or app-level security rules
+• API connections, external integrations, or authentication logic
+• Any other screen or component outside the scope of this issue
+
+ACCEPTANCE CRITERIA
+The issue above is resolved on the relevant screen.
+The fix is visible and correct when accessed as a standard (non-admin) user.
+No collections, workflows, permissions, or API connections have been modified.
+Existing data continues to display correctly after the fix.`;
+
+  // ── CLAUDE ───────────────────────────────────────────────────────────────────
+  // Workflow: code-level, TypeScript-safe, build-validated, minimal change
+  prompts.claude = `You have full access to this codebase. Fix one specific issue.
+Make the smallest safe change that resolves it. Do not refactor anything else.
+${urgencyFlag}
+ISSUE TO FIX
+Category: ${category} · Priority: ${priority.toUpperCase()}
+"${issue}"
+
+WHY THIS MATTERS
+${whyItMatters}
+
+WHAT TO CHANGE
+${suggestedFix}
+
+IMPLEMENTATION STEPS
+1. Find the component — search the codebase for the element described above.
+   Look for: the relevant UI section, CTA element, or ${category.toLowerCase()} pattern.
+
+2. Plan before editing — identify the smallest change that resolves the issue.
+   Do not refactor surrounding code or extract new components unless strictly needed.
+
+3. Apply the fix — edit only the specific file(s) involved.
+   • Preserve all existing props, state interfaces, and component APIs.
+   • Write clean TypeScript — no \`any\` types, no unnecessary \`as\` casts.
+   • If CSS/Tailwind changes are needed, add to existing classes — do not remove unrelated ones.
+
+4. Verify responsiveness — confirm the fix renders correctly at:
+   375px · 768px · 1280px
+
+5. Run the build — execute \`npm run build\` and resolve all TypeScript errors before finishing.
+   The build must pass with zero errors.
+
+DO NOT CHANGE
+• Files unrelated to this specific issue
+• Routing, authentication, or API endpoint logic
+• Existing component APIs or exported interfaces
+• Folder structure, file naming, or module exports
+• Any third-party dependency versions
+
+ACCEPTANCE CRITERIA
+The issue above is visually and functionally resolved.
+\`npm run build\` passes with zero errors and zero TypeScript warnings.
+The fix is correct at 375px, 768px, and 1280px.
+No unrelated tests, components, or routes have been modified.`;
+
+  // ── CURSOR ───────────────────────────────────────────────────────────────────
+  // Workflow: IDE-native, diff-first, codebase search, minimal file scope
+  prompts.cursor = `You are working inside this codebase in Cursor.
+Before applying any change, show the planned diff and confirm scope.
+${urgencyFlag}
+ISSUE TO FIX
+Category: ${category} · Priority: ${priority.toUpperCase()}
+"${issue}"
+
+WHY THIS MATTERS
+${whyItMatters}
+
+WHAT TO CHANGE
+${suggestedFix}
+
+CURSOR WORKFLOW — FOLLOW THESE STEPS IN ORDER
+
+Step 1 — Locate the code
+Use @codebase or ⌘K to search for the component or section related to this issue.
+Search terms to try: ${category.toLowerCase()} elements, CTA patterns, or the specific text/element described above.
+Identify the file and line range before making any edit.
+
+Step 2 — Plan the change
+Before editing, describe:
+  • Which file(s) will change
+  • What specifically will change in each file
+  • Why that is the minimal fix
+
+Show the planned diff. Do not apply until the scope is clear and minimal.
+
+Step 3 — Apply with Composer or Chat
+For single-file changes: use Cursor Chat with the file open.
+For multi-file changes: use Cursor Composer — but keep the scope as tight as possible.
+Press Accept only after reviewing the full diff.
+
+Step 4 — Verify
+Check the fix renders correctly at 375px and 1280px.
+Confirm no TypeScript errors were introduced (check Problems panel).
+
+DO NOT CHANGE
+• Files outside the direct scope of this fix
+• Routing, auth, or data model logic
+• Unrelated components, even if they look "improvable"
+• Create new files unless the fix strictly requires it
+• Rename, move, or restructure any existing files
+
+ACCEPTANCE CRITERIA
+The issue is resolved. The diff is minimal and self-contained.
+No unrelated files appear in the diff.
+The Cursor Problems panel shows zero new errors.`;
+
+  // ── GENERIC ──────────────────────────────────────────────────────────────────
+  // Tool-agnostic: works with any AI builder, no tool-specific language
+  prompts.generic = `Fix this specific product issue. One change — nothing else.
+${urgencyFlag}
+ISSUE TO FIX
+Category: ${category} · Priority: ${priority.toUpperCase()}
+"${issue}"
+
+WHY THIS MATTERS
+${whyItMatters}
+
+WHAT TO CHANGE
+${suggestedFix}
+
+PM CONTEXT — WHY THIS CATEGORY MATTERS
+${context}
+
+SCOPE GUARDRAILS
+• Fix only what is described above.
+• Do not redesign or modify unrelated sections, pages, or components.
+• Do not change authentication, database logic, or backend functionality.
+• If you are unsure about the scope of the change, ask before editing.
+
+TESTING
+After applying the fix:
+• Confirm the issue above is visually or functionally resolved.
+• Test at mobile (375px) and desktop (1280px).
+• Verify that no other part of the product has changed as a side effect.
+
+ACCEPTANCE CRITERIA
+The issue is resolved. Nothing unrelated to this fix has changed.
+The fix is visible and correct on both mobile and desktop viewports.`;
 
   return prompts;
 }
@@ -1156,13 +1335,9 @@ export default function AuditTool() {
 
   function openDrawer(finding: AuditFinding) {
     setSelectedFinding(finding);
-    const b = (result?.detectedBuilder ?? "").toLowerCase();
-    let defaultTab: ToolId = "claude"; // sensible fallback for unknown or no builder
-    if (b.includes("lovable")) defaultTab = "lovable";
-    else if (b.includes("base44")) defaultTab = "base44";
-    else if (b.includes("cursor")) defaultTab = "cursor";
-    // bolt, v0, replit → show claude (code-level fix)
-    setActiveTab(defaultTab);
+    const recommended = getRecommendedTab(result?.detectedBuilder ?? null);
+    // Default to recommended tab if one exists, otherwise generic
+    setActiveTab(recommended ?? "generic");
     setDrawerOpen(true);
     setCopiedPrompt(null);
   }
@@ -1477,165 +1652,197 @@ export default function AuditTool() {
         </div>
 
         {/* ── Fix Prompt Drawer ─────────────────────────────────────────────── */}
-        {drawerOpen && selectedFinding && fixPrompts && (
-          <div
-            className="fixed inset-0 z-50 flex"
-            onClick={(e) => { if (e.target === e.currentTarget) setDrawerOpen(false); }}
-          >
-            {/* Backdrop */}
-            <div className="flex-1 bg-black/60 backdrop-blur-[2px]" onClick={() => setDrawerOpen(false)} />
+        {drawerOpen && selectedFinding && fixPrompts && (() => {
+          const recommendedTab = getRecommendedTab(result?.detectedBuilder ?? null);
+          const hasDetectedBuilder = !!result?.detectedBuilder;
 
-            {/* Panel — bottom sheet on mobile, right-side panel on lg+ */}
-            <div className="
-              fixed bottom-0 left-0 right-0 z-50
-              flex max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-zinc-950 shadow-2xl
-              lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:max-h-none lg:w-[480px] lg:rounded-none lg:rounded-l-2xl
-            ">
+          // Dynamically reorder tabs: recommended tab appears first
+          const ALL_TABS: ToolId[] = ["lovable", "base44", "claude", "cursor", "generic"];
+          const orderedTabs: ToolId[] = recommendedTab
+            ? [recommendedTab, ...ALL_TABS.filter(t => t !== recommendedTab)]
+            : ALL_TABS;
 
-              {/* ── Header ─────────────────────────────────────────────────────── */}
-              <div className="flex shrink-0 items-start justify-between border-b border-zinc-800 px-5 py-4">
-                <div className="min-w-0 mr-4">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-                      Fix prompt
-                    </span>
-                    <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] font-semibold ${P_CONFIG[selectedFinding.priority].badge}`}>
-                      <span className={`h-1 w-1 rounded-full ${P_CONFIG[selectedFinding.priority].dot}`} />
-                      {P_CONFIG[selectedFinding.priority].label}
-                    </span>
-                    <span className="font-mono text-[10px] text-zinc-600">{selectedFinding.category}</span>
-                  </div>
-                  <p className="text-sm font-semibold leading-snug text-white line-clamp-3">
-                    {selectedFinding.issue}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setDrawerOpen(false)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700 text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white"
-                  aria-label="Close"
-                >
-                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+          return (
+            <div
+              className="fixed inset-0 z-50 flex"
+              onClick={(e) => { if (e.target === e.currentTarget) setDrawerOpen(false); }}
+            >
+              {/* Backdrop */}
+              <div className="flex-1 bg-black/60 backdrop-blur-[2px]" onClick={() => setDrawerOpen(false)} />
 
-              {/* ── Detected builder callout ──────────────────────────────────── */}
-              {result?.detectedBuilder && (
-                <div className="shrink-0 border-b border-zinc-800 bg-violet-950/60 px-5 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm leading-none">⚡</span>
-                    <p className="text-xs text-violet-300">
-                      <span className="font-semibold text-violet-100">Detected: {result.detectedBuilder}</span>
-                      {" "}— prompt tailored for this builder
+              {/* Panel */}
+              <div className="
+                fixed bottom-0 left-0 right-0 z-50
+                flex max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-zinc-950 shadow-2xl
+                lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:max-h-none lg:w-[500px] lg:rounded-none lg:rounded-l-2xl
+              ">
+
+                {/* ── Header ───────────────────────────────────────────────── */}
+                <div className="flex shrink-0 items-start justify-between border-b border-zinc-800 px-5 py-4">
+                  <div className="min-w-0 mr-4">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                        Fix prompt
+                      </span>
+                      <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] font-semibold ${P_CONFIG[selectedFinding.priority].badge}`}>
+                        <span className={`h-1 w-1 rounded-full ${P_CONFIG[selectedFinding.priority].dot}`} />
+                        {P_CONFIG[selectedFinding.priority].label}
+                      </span>
+                      <span className="font-mono text-[10px] text-zinc-600">{selectedFinding.category}</span>
+                    </div>
+                    <p className="text-sm font-semibold leading-snug text-white line-clamp-3">
+                      {selectedFinding.issue}
                     </p>
                   </div>
+                  <button
+                    onClick={() => setDrawerOpen(false)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700 text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white"
+                    aria-label="Close"
+                  >
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-              )}
 
-              {/* ── Tabs ─────────────────────────────────────────────────────── */}
-              <div className="flex shrink-0 border-b border-zinc-800 px-4 pt-1">
-                {(["lovable", "base44", "claude", "cursor"] as ToolId[]).map((tool) => {
-                  const isDetected = result?.detectedBuilder?.toLowerCase().includes(tool);
-                  return (
-                    <button
-                      key={tool}
-                      onClick={() => setActiveTab(tool)}
-                      className={`relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 font-mono text-xs font-semibold transition-colors ${
-                        activeTab === tool
-                          ? "border-white text-white"
-                          : "border-transparent text-zinc-500 hover:text-zinc-300"
-                      }`}
-                    >
-                      {TOOL_LABELS[tool]}
-                      {isDetected && (
-                        <span className="rounded-full bg-violet-500 px-1.5 py-px font-mono text-[8px] font-bold leading-none text-white">
-                          ★
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* ── Prompt content ───────────────────────────────────────────── */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="space-y-4 p-5">
-
-                  {/* Tool description chip */}
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3">
-                    <p className="text-xs leading-relaxed text-zinc-400">
-                      <span className="font-semibold text-zinc-200">{TOOL_LABELS[activeTab]}</span>
-                      {activeTab === "lovable" && " — prompt optimised for visual and design-layer fixes without touching app logic"}
-                      {activeTab === "base44" && " — prompt preserves data model and business logic while correcting the UX issue"}
-                      {activeTab === "claude" && " — full code-level fix with responsive testing and TypeScript compliance guardrails"}
-                      {activeTab === "cursor" && " — in-editor fix using the existing file structure and code conventions"}
-                    </p>
-                  </div>
-
-                  {/* Prompt block — code editor style */}
-                  <div className="overflow-hidden rounded-xl border border-zinc-800">
-                    {/* Editor chrome */}
-                    <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex gap-1.5">
-                          <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-                          <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-                          <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
-                        </div>
-                        <span className="font-mono text-[10px] text-zinc-600">
-                          fix-prompt-{activeTab}.txt
-                        </span>
+                {/* ── Builder callout ───────────────────────────────────────── */}
+                {hasDetectedBuilder ? (
+                  <div className="shrink-0 border-b border-zinc-800 bg-violet-950/50 px-5 py-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <span className="mt-px shrink-0 text-sm leading-none">⚡</span>
+                      <div>
+                        <p className="text-xs font-semibold text-violet-100">
+                          Recommended builder: {result?.detectedBuilder}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-violet-400">
+                          The <span className="text-violet-200">{recommendedTab ? TOOL_LABELS[recommendedTab] : result?.detectedBuilder}</span> tab is pre-selected with a prompt tailored for this builder.
+                        </p>
                       </div>
-                      <button
-                        onClick={() => copyPrompt(activeTab, fixPrompts[activeTab])}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold transition-all duration-150 ${
-                          copiedPrompt === activeTab
-                            ? "bg-green-900/70 text-green-400 ring-1 ring-green-700"
-                            : "bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95"
-                        }`}
-                      >
-                        {copiedPrompt === activeTab ? (
-                          <>
-                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                            </svg>
-                            Copy prompt
-                          </>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="shrink-0 border-b border-zinc-800 bg-zinc-900/50 px-5 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm leading-none">🔍</span>
+                      <p className="text-[11px] text-zinc-500">
+                        No specific builder detected. Choose the prompt that matches your workflow.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Tabs ─────────────────────────────────────────────────── */}
+                <div className="flex shrink-0 overflow-x-auto border-b border-zinc-800 px-4 pt-1 scrollbar-none">
+                  {orderedTabs.map((tool) => {
+                    const isRecommended = tool === recommendedTab && hasDetectedBuilder;
+                    const tooltipText = isRecommended ? RECOMMENDED_TOOLTIP[tool] : null;
+                    return (
+                      <div key={tool} className="group relative shrink-0">
+                        <button
+                          onClick={() => setActiveTab(tool)}
+                          className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 font-mono text-xs font-semibold transition-colors ${
+                            activeTab === tool
+                              ? "border-white text-white"
+                              : "border-transparent text-zinc-500 hover:text-zinc-300"
+                          }`}
+                        >
+                          {TOOL_LABELS[tool]}
+                          {isRecommended && (
+                            <span className="rounded bg-violet-600 px-1.5 py-px font-mono text-[8px] font-bold leading-none text-white">
+                              Recommended
+                            </span>
+                          )}
+                        </button>
+                        {/* Tooltip — shown on hover for recommended tab */}
+                        {tooltipText && (
+                          <div className="pointer-events-none absolute bottom-full left-0 z-10 mb-2 hidden w-64 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 shadow-xl group-hover:block">
+                            <p className="text-[11px] leading-relaxed text-zinc-300">{tooltipText}</p>
+                            {/* Arrow */}
+                            <div className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45 border-b border-r border-zinc-700 bg-zinc-800" />
+                          </div>
                         )}
-                      </button>
-                    </div>
-                    {/* Prompt text */}
-                    <div className="bg-zinc-950 p-5">
-                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-300">
-                        {fixPrompts[activeTab]}
-                      </pre>
-                    </div>
-                  </div>
-
-                  {/* Footer tip */}
-                  <div className="flex items-start gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-                    <span className="mt-0.5 shrink-0 text-sm leading-none">💡</span>
-                    <p className="text-xs leading-relaxed text-zinc-500">
-                      Paste into <span className="text-zinc-300">{TOOL_LABELS[activeTab]}</span> as a focused, single-issue session.
-                      One fix per prompt produces significantly better results than batching multiple issues.
-                    </p>
-                  </div>
-
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
 
+                {/* ── Prompt content ────────────────────────────────────────── */}
+                <div className="flex-1 overflow-y-auto">
+                  <div className="space-y-4 p-5">
+
+                    {/* Tool description */}
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3">
+                      <p className="text-xs leading-relaxed text-zinc-400">
+                        <span className="font-semibold text-zinc-200">{TOOL_LABELS[activeTab]}</span>
+                        {" — "}{TOOL_DESCRIPTIONS[activeTab]}
+                      </p>
+                    </div>
+
+                    {/* Prompt block — code editor style */}
+                    <div className="overflow-hidden rounded-xl border border-zinc-800">
+                      {/* Editor chrome */}
+                      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex gap-1.5">
+                            <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                            <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                            <div className="h-2.5 w-2.5 rounded-full bg-zinc-700" />
+                          </div>
+                          <span className="font-mono text-[10px] text-zinc-600">
+                            fix-prompt-{activeTab}.txt
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => copyPrompt(activeTab, fixPrompts[activeTab])}
+                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold transition-all duration-150 ${
+                            copiedPrompt === activeTab
+                              ? "bg-green-900/70 text-green-400 ring-1 ring-green-700"
+                              : "bg-white text-zinc-950 hover:bg-zinc-200 active:scale-95"
+                          }`}
+                        >
+                          {copiedPrompt === activeTab ? (
+                            <>
+                              <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                              </svg>
+                              Copy prompt
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {/* Prompt text */}
+                      <div className="bg-zinc-950 p-5">
+                        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-zinc-300">
+                          {fixPrompts[activeTab]}
+                        </pre>
+                      </div>
+                    </div>
+
+                    {/* Footer tip */}
+                    <div className="flex items-start gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+                      <span className="mt-0.5 shrink-0 text-sm leading-none">💡</span>
+                      <p className="text-xs leading-relaxed text-zinc-500">
+                        Paste into{" "}
+                        <span className="font-semibold text-zinc-300">{TOOL_LABELS[activeTab]}</span>{" "}
+                        as a focused, single-issue session. One fix per prompt produces significantly better results than batching multiple issues.
+                      </p>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </>
     );
   }
