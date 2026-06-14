@@ -48,6 +48,8 @@ interface AuditResult {
   bestQuickWin: string;
   mainProductRisk: string;
   findings: AuditFinding[];
+  /** Will hold a screenshot data-URL or CDN URL once capture is implemented */
+  screenshotUrl?: string;
 }
 
 type FixPrompts = Record<ToolId, string>;
@@ -66,6 +68,8 @@ interface FindingEvidence {
   signals: EvidenceSignal[];
   triggerReason: string;
   dataSource: "real" | "heuristic";
+  /** Will hold a screenshot data-URL or CDN URL once capture is implemented */
+  screenshotUrl?: string;
 }
 
 const TOOL_LABELS: Record<ToolId, string> = {
@@ -2079,6 +2083,70 @@ export default function AuditTool() {
             <SummaryCard label="Main product risk" value="Review" sub={result.mainProductRisk} accent="amber" />
           </div>
 
+          {/* ── Page Snapshot ──────────────────────────────────────────────── */}
+          <div className="overflow-hidden rounded-xl border border-zinc-200">
+            <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  Page Snapshot
+                </span>
+                <span className="rounded border border-zinc-200 bg-white px-2 py-0.5 font-mono text-[9px] text-zinc-500 truncate max-w-[280px]">
+                  {url}
+                </span>
+              </div>
+              <span className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 font-mono text-[9px] text-zinc-400">
+                coming next
+              </span>
+            </div>
+
+            {result.screenshotUrl ? (
+              /* Future: render screenshot here */
+              <div className="flex items-center justify-center bg-zinc-50 p-4">
+                <img src={result.screenshotUrl} alt={`Screenshot of ${result.domain}`} className="rounded-lg border border-zinc-200 shadow-sm max-h-48 object-cover" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 bg-white px-4 py-4">
+                {/* Visual stub */}
+                <div className="shrink-0 flex h-20 w-32 items-center justify-center rounded-lg border-2 border-dashed border-zinc-200 bg-zinc-50">
+                  <div className="text-center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-1 text-zinc-300" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <p className="font-mono text-[8px] text-zinc-300">No screenshot</p>
+                  </div>
+                </div>
+                {/* Explanation */}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-700">Screenshot capture coming next</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
+                    This audit is currently based on live HTML and page signals — title, structure, links, images, and load data fetched directly from the page.
+                    Visual screenshots will be added in the next release.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {apiData && (
+                      <>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                          <span className="h-1 w-1 rounded-full bg-green-400" />
+                          {apiData.wordCount} words extracted
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                          <span className="h-1 w-1 rounded-full bg-green-400" />
+                          {(apiData.pageSize / 1000).toFixed(0)}KB page size
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-zinc-100 bg-zinc-50 px-2 py-0.5 font-mono text-[9px] text-zinc-500">
+                          <span className="h-1 w-1 rounded-full bg-green-400" />
+                          {apiData.links.total} links mapped
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Priority note */}
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5">
             <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
@@ -2413,8 +2481,8 @@ export default function AuditTool() {
               className="fixed inset-0 z-50 flex"
               onClick={(e) => { if (e.target === e.currentTarget) setEvidenceDrawerOpen(false); }}
             >
-              {/* Backdrop */}
-              <div className="flex-1 bg-black/40 backdrop-blur-[2px]" onClick={() => setEvidenceDrawerOpen(false)} />
+              {/* Backdrop — plain overlay, no blur (blur makes Clearspec look like a screenshot of the audited site) */}
+              <div className="flex-1 bg-black/40" onClick={() => setEvidenceDrawerOpen(false)} />
 
               {/* Panel — white/light, distinct from the dark fix prompt panel */}
               <div className="
@@ -2507,6 +2575,29 @@ export default function AuditTool() {
                       <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
                         <p className="text-xs leading-relaxed text-zinc-600">{ev.triggerReason}</p>
                       </div>
+                    </div>
+
+                    {/* Visual evidence section */}
+                    <div>
+                      <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                        Visual evidence
+                      </p>
+                      {ev.screenshotUrl ? (
+                        <img
+                          src={ev.screenshotUrl}
+                          alt="Page screenshot"
+                          className="w-full rounded-xl border border-zinc-200 object-cover shadow-sm"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-3 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-zinc-300" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                          <p className="text-xs text-zinc-400">Visual evidence not captured yet. Screenshots will be added in the next release.</p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Separator + Fix Prompt CTA */}
