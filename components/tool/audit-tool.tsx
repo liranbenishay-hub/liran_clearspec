@@ -52,6 +52,22 @@ interface AuditResult {
 
 type FixPrompts = Record<ToolId, string>;
 
+// ── Evidence types ────────────────────────────────────────────────────────────
+
+interface EvidenceSignal {
+  label: string;
+  value: string;
+  status: "good" | "warning" | "critical" | "neutral";
+  note?: string;
+}
+
+interface FindingEvidence {
+  summary: string;
+  signals: EvidenceSignal[];
+  triggerReason: string;
+  dataSource: "real" | "heuristic";
+}
+
 const TOOL_LABELS: Record<ToolId, string> = {
   lovable: "Lovable",
   base44: "Base44",
@@ -329,6 +345,503 @@ The issue is resolved. Nothing unrelated to this fix has changed.
 The fix is visible and correct on both mobile and desktop viewports.`;
 
   return prompts;
+}
+
+// ── Evidence engine — maps audit signals to findings ─────────────────────────
+
+function buildFindingEvidence(
+  finding: AuditFinding,
+  apiData: APIAuditData | null,
+  url: string,
+  isRealAudit: boolean
+): FindingEvidence {
+  // No live data — heuristic mode
+  if (!apiData || !isRealAudit) {
+    return {
+      summary: "This finding was generated from URL pattern analysis — the page could not be fetched for a live audit.",
+      signals: [
+        { label: "Audit mode", value: "URL heuristics (no live fetch)", status: "warning" },
+        { label: "URL analysed", value: url.replace(/https?:\/\//, ""), status: "neutral" },
+        { label: "Finding basis", value: `${finding.category} · pattern match`, status: "neutral" },
+        { label: "Priority", value: finding.priority, status: finding.priority === "urgent" ? "critical" : finding.priority === "important" ? "warning" : "neutral" },
+      ],
+      triggerReason: "The auditor could not fetch this URL. Findings are based on URL pattern analysis and known site-type characteristics — not live page content. For evidence-backed findings, ensure the URL is publicly accessible.",
+      dataSource: "heuristic",
+    };
+  }
+
+  const { category, issue } = finding;
+  const issueLower = issue.toLowerCase();
+
+  switch (category) {
+
+    // ── PRODUCT CLARITY ───────────────────────────────────────────────────────
+    case "Product Clarity": {
+      const titleLen = apiData.title?.length ?? 0;
+      const descLen = apiData.description?.length ?? 0;
+      const h1Count = apiData.h1Tags?.length ?? 0;
+      const h2Count = apiData.h2Tags?.length ?? 0;
+      const firstH1 = apiData.h1Tags?.[0] ?? "";
+
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Page title",
+          value: apiData.title ? `"${apiData.title.slice(0, 60)}${apiData.title.length > 60 ? "…" : ""}"` : "Not found",
+          status: !apiData.title ? "critical" : titleLen < 20 ? "warning" : titleLen > 70 ? "warning" : "good",
+        },
+        {
+          label: "Title length",
+          value: titleLen > 0 ? `${titleLen} characters` : "0 characters",
+          status: titleLen === 0 ? "critical" : titleLen < 20 ? "warning" : titleLen > 70 ? "warning" : "good",
+          note: "Target: 20–60 characters for clear product identity",
+        },
+        {
+          label: "Meta description",
+          value: apiData.description ? `${descLen} chars · "${apiData.description.slice(0, 50)}${descLen > 50 ? "…" : ""}"` : "Missing",
+          status: !apiData.description ? "critical" : descLen < 50 ? "warning" : "good",
+          note: "Target: 120–155 characters",
+        },
+        {
+          label: "H1 tags found",
+          value: h1Count === 0 ? "None" : `${h1Count}${firstH1 ? ` · "${firstH1.slice(0, 50)}${firstH1.length > 50 ? "…" : ""}"` : ""}`,
+          status: h1Count === 0 ? "critical" : h1Count > 3 ? "warning" : "good",
+          note: "Target: 1–2 H1 tags as the primary value statement",
+        },
+        {
+          label: "H2 tags found",
+          value: `${h2Count}`,
+          status: "neutral",
+        },
+        {
+          label: "Word count",
+          value: `${apiData.wordCount} words`,
+          status: apiData.wordCount < 80 ? "critical" : apiData.wordCount < 200 ? "warning" : "good",
+          note: "Target: ≥ 200 words for a product page",
+        },
+        {
+          label: "CTA elements detected",
+          value: apiData.ctaElements.length > 0
+            ? `${apiData.ctaElements.length} found · "${apiData.ctaElements.slice(0, 2).join('", "')}"`
+            : "None detected",
+          status: apiData.ctaElements.length === 0 ? "critical" : "good",
+        },
+      ];
+
+      let summary = "";
+      let triggerReason = "";
+
+      if (!apiData.title || issueLower.includes("no name") || issueLower.includes("no title")) {
+        summary = "No page title tag was found. The product has no name in browser tabs, search results, or link previews.";
+        triggerReason = "Condition: title tag must be present. Actual: title is empty or missing.";
+      } else if (issueLower.includes("too vague") || (titleLen > 0 && titleLen < 20)) {
+        summary = `The page title is ${titleLen} characters — too short to communicate product value or audience to users scanning search results.`;
+        triggerReason = `Threshold: title length must be ≥ 20 characters. Actual: ${titleLen} characters ("${apiData.title}").`;
+      } else if (issueLower.includes("cut off") || titleLen > 70) {
+        summary = `The title is ${titleLen} characters. Search engines and link previews truncate at ~60 characters — the end of your title may never be seen.`;
+        triggerReason = `Threshold: titles over 60 characters are truncated. Actual: ${titleLen} characters.`;
+      } else if (issueLower.includes("no product description") || !apiData.description) {
+        summary = "No meta description tag was found. Search engines and social platforms will auto-generate preview text from random page content.";
+        triggerReason = "Condition: meta description must be present. Actual: no description detected.";
+      } else if (issueLower.includes("description is too brief") || (descLen > 0 && descLen < 50)) {
+        summary = `The meta description is only ${descLen} characters — too short to communicate context or value to users scanning search results.`;
+        triggerReason = `Threshold: description should be ≥ 50 characters for meaningful previews. Actual: ${descLen} characters.`;
+      } else if (issueLower.includes("no clear value statement") || h1Count === 0) {
+        summary = "No H1 tag was detected. There is no primary value statement anchoring the page for users or search engines.";
+        triggerReason = "Condition: at least one H1 is required as the primary message. Actual: 0 H1 tags detected.";
+      } else if (issueLower.includes("competing headlines") || h1Count > 3) {
+        summary = `${h1Count} H1 tags were found — multiple competing headlines dilute the page's primary message and confuse both users and search engines.`;
+        triggerReason = `Threshold: a page should have 1–3 H1 tags. Actual: ${h1Count} H1 tags.`;
+      } else if (issueLower.includes("not enough product story") || apiData.wordCount < 80) {
+        summary = `Only ${apiData.wordCount} words were found. This is not enough to explain what the product does, who it is for, and why it matters.`;
+        triggerReason = `Threshold: minimum 80 words required for product context. Actual: ${apiData.wordCount} words.`;
+      } else {
+        summary = "The page lacks sufficient content or structure to communicate product value clearly within 5 seconds.";
+        triggerReason = `Signals reviewed: title (${titleLen} chars), H1s (${h1Count}), word count (${apiData.wordCount}).`;
+      }
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── CONVERSION ────────────────────────────────────────────────────────────
+    case "Conversion": {
+      const buttonCount = apiData.buttons.total;
+      const ctaCount = apiData.ctaElements.length;
+      const formCount = apiData.forms.total;
+
+      const signals: EvidenceSignal[] = [
+        {
+          label: "CTA elements detected",
+          value: ctaCount > 0 ? `${ctaCount} · "${apiData.ctaElements.slice(0, 2).join('", "')}"` : "None detected",
+          status: ctaCount === 0 ? "critical" : "good",
+          note: "Outcome-based copy: 'Get started', 'Try free', 'See how it works'",
+        },
+        {
+          label: "Buttons on page",
+          value: buttonCount > 0
+            ? `${buttonCount} · "${apiData.buttons.samples.slice(0, 2).join('", "')}"`
+            : "None detected",
+          status: buttonCount === 0 ? "critical" : ctaCount === 0 ? "warning" : "good",
+        },
+        {
+          label: "Forms detected",
+          value: `${formCount}`,
+          status: formCount === 0 && !apiData.signals.hasSignup ? "warning" : "good",
+        },
+        {
+          label: "Pricing detectable",
+          value: apiData.signals.hasPricing ? "Yes" : "Not found",
+          status: apiData.signals.hasPricing ? "good" : "warning",
+          note: apiData.signals.hasPricing ? `Indicators: ${apiData.signals.pricingIndicators.slice(0, 2).join(", ")}` : undefined,
+        },
+        {
+          label: "Sign-up path detectable",
+          value: apiData.signals.hasSignup ? "Yes" : "Not found",
+          status: apiData.signals.hasSignup ? "good" : "warning",
+          note: apiData.signals.hasSignup ? `Indicators: ${apiData.signals.signupIndicators.slice(0, 2).join(", ")}` : undefined,
+        },
+        {
+          label: "Contact path",
+          value: apiData.signals.hasContact ? "Found" : "Not found",
+          status: apiData.signals.hasContact ? "good" : "neutral",
+        },
+      ];
+
+      let summary = "";
+      let triggerReason = "";
+
+      if (ctaCount === 0 && buttonCount === 0) {
+        summary = "No call-to-action elements or buttons were detected on this page. There is no activation path for users who are ready to act.";
+        triggerReason = "Condition: at least one CTA or button required. Actual: 0 CTAs, 0 buttons detected.";
+      } else if (ctaCount === 0 && buttonCount > 0) {
+        summary = `${buttonCount} buttons were found, but none contain outcome-based copy. Generic labels like "Submit" or "Learn more" don't give users a reason to click.`;
+        triggerReason = `Condition: buttons must use outcome-based copy to count as CTAs. Actual: ${buttonCount} buttons, 0 recognized as CTAs. Buttons found: "${apiData.buttons.samples.slice(0, 3).join('", "')}"`;
+      } else if (!apiData.signals.hasPricing) {
+        summary = "No pricing information was detectable. B2B buyers cannot self-qualify, which typically causes 40–60% of prospects to disengage before contacting sales.";
+        triggerReason = "Condition: pricing information should be present on a SaaS or product site. Actual: no pricing indicators detected.";
+      } else if (!apiData.signals.hasSignup) {
+        summary = "No sign-up or account creation path was detected. Users who are ready to try the product have nowhere to go.";
+        triggerReason = `Condition: self-service activation path should be detectable. Actual: no signup indicators found. Forms detected: ${formCount}.`;
+      } else {
+        summary = "The conversion path on this page has gaps that may reduce the rate at which interested users take action.";
+        triggerReason = `Signals: CTAs (${ctaCount}), buttons (${buttonCount}), pricing (${apiData.signals.hasPricing}), signup (${apiData.signals.hasSignup}).`;
+      }
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── USER JOURNEY ──────────────────────────────────────────────────────────
+    case "User Journey": {
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Total links on page",
+          value: `${apiData.links.total}`,
+          status: apiData.links.total > 60 ? "warning" : "good",
+          note: "Over 60 links can create decision paralysis",
+        },
+        {
+          label: "Internal links",
+          value: `${apiData.links.internal}`,
+          status: "neutral",
+        },
+        {
+          label: "External links",
+          value: `${apiData.links.external}`,
+          status: apiData.links.external > 20 ? "warning" : "neutral",
+        },
+        {
+          label: "Forms detected",
+          value: `${apiData.forms.total}`,
+          status: "neutral",
+        },
+        {
+          label: "Form input fields",
+          value: `${apiData.forms.inputs}`,
+          status: apiData.forms.inputs > 6 ? "warning" : "neutral",
+          note: "Each additional field reduces completion by ~10%",
+        },
+        {
+          label: "CTA elements",
+          value: `${apiData.ctaElements.length}`,
+          status: apiData.ctaElements.length === 0 && apiData.forms.total > 0 ? "warning" : "neutral",
+        },
+      ];
+
+      let summary = "";
+      let triggerReason = "";
+
+      if (apiData.links.total > 60) {
+        summary = `${apiData.links.total} links were found on this page. High link density fragments user attention and makes it harder to follow the primary conversion path.`;
+        triggerReason = `Threshold: over 60 links triggers a User Journey finding. Actual: ${apiData.links.total} links.`;
+      } else if (apiData.forms.total > 0 && apiData.ctaElements.length === 0) {
+        summary = `${apiData.forms.total} form${apiData.forms.total > 1 ? "s" : ""} found but no CTA elements. Users encounter a form with no stated outcome or reason to complete it.`;
+        triggerReason = `Condition: forms should be paired with outcome-oriented CTAs. Actual: ${apiData.forms.total} forms, 0 CTAs.`;
+      } else {
+        summary = "User journey signals were reviewed for friction points that reduce task completion or flow continuity.";
+        triggerReason = `Signals: links (${apiData.links.total}), forms (${apiData.forms.total}), inputs (${apiData.forms.inputs}), CTAs (${apiData.ctaElements.length}).`;
+      }
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── TRUST SIGNALS ─────────────────────────────────────────────────────────
+    case "Trust Signals": {
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Contact path",
+          value: apiData.signals.hasContact ? "Detected" : "Not found",
+          status: apiData.signals.hasContact ? "good" : "warning",
+          note: apiData.signals.hasContact
+            ? `Indicators: ${apiData.signals.contactIndicators.slice(0, 2).join(", ")}`
+            : "No email link, contact page, or chat widget found",
+        },
+        {
+          label: "Open Graph tags",
+          value: apiData.signals.hasOgTags ? "Present" : "Missing",
+          status: apiData.signals.hasOgTags ? "good" : "warning",
+          note: "Controls how this page looks when shared on LinkedIn, Slack, email",
+        },
+        {
+          label: "Schema markup",
+          value: apiData.signals.hasSchemaMarkup ? "Present" : "Not detected",
+          status: apiData.signals.hasSchemaMarkup ? "good" : "neutral",
+        },
+        {
+          label: "Chat widget",
+          value: apiData.signals.hasChatWidget ? "Detected" : "Not detected",
+          status: "neutral",
+        },
+        {
+          label: "Cookie consent",
+          value: apiData.signals.hasCookieBanner ? "Present" : "Not detected",
+          status: "neutral",
+        },
+      ];
+
+      let summary = "";
+      let triggerReason = "";
+
+      if (!apiData.signals.hasContact) {
+        summary = "No contact path was detected — no email link, contact page, or chat widget found. B2B buyers and first-time users look for a way to reach the team as a trust signal.";
+        triggerReason = "Condition: contact path (email, contact page, or chat widget) should be detectable. Actual: none found.";
+      } else if (!apiData.signals.hasOgTags) {
+        summary = "No Open Graph tags were found. Every share of this page on LinkedIn, Slack, or email renders as a plain URL — no image, no title, no description.";
+        triggerReason = "Condition: og:title, og:description, og:image should be present. Actual: no OG tags detected.";
+      } else {
+        summary = "Trust signals on this page were reviewed. Some signals that B2B buyers check before engaging are missing or incomplete.";
+        triggerReason = `Signals: contact (${apiData.signals.hasContact}), OG tags (${apiData.signals.hasOgTags}), schema (${apiData.signals.hasSchemaMarkup}).`;
+      }
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── ACCESSIBILITY ─────────────────────────────────────────────────────────
+    case "Accessibility": {
+      const missingRatio = apiData.images.total > 0
+        ? Math.round((apiData.images.missingAlt / apiData.images.total) * 100)
+        : 0;
+
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Total images",
+          value: `${apiData.images.total}`,
+          status: "neutral",
+        },
+        {
+          label: "Images with alt text",
+          value: `${apiData.images.withAlt} of ${apiData.images.total}`,
+          status: apiData.images.withAlt === apiData.images.total ? "good" : "warning",
+        },
+        {
+          label: "Images missing alt text",
+          value: apiData.images.missingAlt > 0 ? `${apiData.images.missingAlt} images` : "None",
+          status: apiData.images.missingAlt > 5 ? "critical" : apiData.images.missingAlt > 0 ? "warning" : "good",
+        },
+        {
+          label: "Missing alt ratio",
+          value: `${missingRatio}%`,
+          status: missingRatio > 50 ? "critical" : missingRatio > 20 ? "warning" : "good",
+          note: "WCAG AA requires all content images to have descriptive alt text",
+        },
+      ];
+
+      if (apiData.images.missingAltSamples.length > 0) {
+        signals.push({
+          label: "Affected image sources",
+          value: apiData.images.missingAltSamples.slice(0, 2).map(s => s.split("/").pop() ?? s).join(", "),
+          status: "neutral",
+          note: "Sample — not exhaustive",
+        });
+      }
+
+      const summary = apiData.images.missingAlt > 0
+        ? `${apiData.images.missingAlt} of ${apiData.images.total} images (${missingRatio}%) are missing alt text. Screen reader users cannot access this content, and it fails WCAG AA.`
+        : "All images have alt text — accessibility is clear for this signal.";
+
+      const triggerReason = apiData.images.missingAlt > 5
+        ? `Threshold: >5 images missing alt text → Urgent. Actual: ${apiData.images.missingAlt} images without alt text out of ${apiData.images.total} total.`
+        : `Threshold: any images missing alt text → Important. Actual: ${apiData.images.missingAlt} out of ${apiData.images.total} images missing alt.`;
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── MOBILE EXPERIENCE ─────────────────────────────────────────────────────
+    case "Mobile Experience": {
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Viewport meta tag",
+          value: apiData.signals.hasMobileViewport ? "Present" : "Missing",
+          status: apiData.signals.hasMobileViewport ? "good" : "critical",
+          note: apiData.signals.hasMobileViewport
+            ? "width=device-width detected — responsive rendering enabled"
+            : "Without this, mobile browsers render a scaled-down desktop view",
+        },
+        {
+          label: "Page size",
+          value: `${(apiData.pageSize / 1000).toFixed(0)}KB`,
+          status: apiData.pageSize > 800_000 ? "critical" : apiData.pageSize > 400_000 ? "warning" : "good",
+          note: "Larger pages create longer load times on mobile connections",
+        },
+        {
+          label: "Open Graph tags",
+          value: apiData.signals.hasOgTags ? "Present" : "Missing",
+          status: apiData.signals.hasOgTags ? "good" : "warning",
+        },
+        {
+          label: "Buttons detected",
+          value: `${apiData.buttons.total}`,
+          status: "neutral",
+          note: "Touch targets should be ≥ 44×44px",
+        },
+      ];
+
+      const summary = !apiData.signals.hasMobileViewport
+        ? "The viewport meta tag is missing. The page renders as a scaled-down desktop layout on mobile — text is unreadable, navigation is unusable, and touch targets are too small."
+        : "The viewport tag is present. Mobile experience issues detected relate to other mobile-specific signals.";
+
+      const triggerReason = !apiData.signals.hasMobileViewport
+        ? 'Condition: <meta name="viewport" content="width=device-width, initial-scale=1"> must be present. Actual: not detected.'
+        : `Signals reviewed: viewport (${apiData.signals.hasMobileViewport}), page size (${(apiData.pageSize / 1000).toFixed(0)}KB).`;
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── PERFORMANCE PERCEPTION ────────────────────────────────────────────────
+    case "Performance Perception": {
+      const pageSizeKB = Math.round(apiData.pageSize / 1000);
+
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Page size",
+          value: `${pageSizeKB}KB`,
+          status: apiData.pageSize > 800_000 ? "critical" : apiData.pageSize > 400_000 ? "warning" : "good",
+          note: "Target: < 300KB for fast initial render",
+        },
+        {
+          label: "Server response time",
+          value: `${apiData.fetchDuration}ms`,
+          status: apiData.fetchDuration > 3000 ? "critical" : apiData.fetchDuration > 1500 ? "warning" : "good",
+          note: "Time to first byte (TTFB) from the auditor's perspective",
+        },
+        {
+          label: "Script tags",
+          value: `${apiData.scripts}`,
+          status: apiData.scripts > 15 ? "warning" : "good",
+          note: "Each script adds a network request and may block rendering",
+        },
+        {
+          label: "Stylesheet tags",
+          value: `${apiData.stylesheets}`,
+          status: apiData.stylesheets > 8 ? "warning" : "neutral",
+        },
+        {
+          label: "Canonical tag",
+          value: apiData.signals.hasCanonical ? "Present" : "Missing",
+          status: apiData.signals.hasCanonical ? "good" : "warning",
+          note: "Prevents duplicate page indexing in search engines",
+        },
+        {
+          label: "Word count",
+          value: `${apiData.wordCount} words`,
+          status: "neutral",
+        },
+      ];
+
+      let summary = "";
+      let triggerReason = "";
+
+      if (apiData.pageSize > 800_000) {
+        summary = `The page is ${pageSizeKB}KB. On a typical mobile connection, this takes 3–5 seconds to load. 53% of mobile users abandon after 3 seconds.`;
+        triggerReason = `Threshold: pages over 800KB → Urgent. Actual: ${pageSizeKB}KB.`;
+      } else if (apiData.pageSize > 400_000) {
+        summary = `The page is ${pageSizeKB}KB — above the recommended limit. This creates measurable load friction even on fast connections.`;
+        triggerReason = `Threshold: pages over 400KB → Important. Actual: ${pageSizeKB}KB.`;
+      } else if (apiData.scripts > 15) {
+        summary = `${apiData.scripts} script tags detected. Each adds a network request and may block page rendering. This is likely more than the page needs.`;
+        triggerReason = `Threshold: more than 15 scripts → Performance finding. Actual: ${apiData.scripts}.`;
+      } else if (!apiData.signals.hasCanonical) {
+        summary = "No canonical tag was found. Search engines may index multiple URL versions of this page, diluting SEO authority across duplicates.";
+        triggerReason = "Condition: canonical link tag should be present. Actual: not detected.";
+      } else {
+        summary = "Performance signals were reviewed for this page.";
+        triggerReason = `Signals: page size (${pageSizeKB}KB), scripts (${apiData.scripts}), fetch time (${apiData.fetchDuration}ms).`;
+      }
+
+      return { summary, signals, triggerReason, dataSource: "real" };
+    }
+
+    // ── UX FRICTION ───────────────────────────────────────────────────────────
+    case "UX Friction": {
+      const signals: EvidenceSignal[] = [
+        {
+          label: "Total links",
+          value: `${apiData.links.total}`,
+          status: apiData.links.total > 60 ? "warning" : "neutral",
+        },
+        {
+          label: "Buttons",
+          value: apiData.buttons.total > 0 ? `${apiData.buttons.total} · "${apiData.buttons.samples.slice(0, 2).join('", "')}"` : "0",
+          status: "neutral",
+        },
+        {
+          label: "Forms",
+          value: `${apiData.forms.total}`,
+          status: "neutral",
+        },
+        {
+          label: "Form input fields",
+          value: `${apiData.forms.inputs}`,
+          status: apiData.forms.inputs > 5 ? "warning" : "neutral",
+          note: "Each extra field before value reduces completion by ~10%",
+        },
+        {
+          label: "CTA elements",
+          value: `${apiData.ctaElements.length}`,
+          status: apiData.ctaElements.length === 0 ? "warning" : "neutral",
+        },
+      ];
+
+      return {
+        summary: "UX friction signals were reviewed for patterns that increase drop-off or reduce task completion.",
+        signals,
+        triggerReason: `Signals: links (${apiData.links.total}), form inputs (${apiData.forms.inputs}), CTAs (${apiData.ctaElements.length}), buttons (${apiData.buttons.total}).`,
+        dataSource: "real",
+      };
+    }
+
+    // ── FALLBACK ──────────────────────────────────────────────────────────────
+    default: {
+      return {
+        summary: "This finding was generated based on audit patterns for this site type and category.",
+        signals: [
+          { label: "Category", value: category, status: "neutral" },
+          { label: "Audit mode", value: "Live page data", status: "good" },
+          { label: "Priority", value: finding.priority, status: finding.priority === "urgent" ? "critical" : "neutral" },
+        ],
+        triggerReason: `Category: ${category}. Finding was created based on product audit patterns.`,
+        dataSource: "real",
+      };
+    }
+  }
 }
 
 // ── URL analysis ──────────────────────────────────────────────────────────────
@@ -1156,13 +1669,17 @@ export default function AuditTool() {
   const [activeTab, setActiveTab] = useState<ToolId>("lovable");
   const [copiedPrompt, setCopiedPrompt] = useState<ToolId | null>(null);
 
+  // Evidence drawer state
+  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
+  const [evidenceFinding, setEvidenceFinding] = useState<AuditFinding | null>(null);
+
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (drawerOpen) document.body.style.overflow = "hidden";
+    if (drawerOpen || evidenceDrawerOpen) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
     return () => { document.body.style.overflow = ""; };
-  }, [drawerOpen]);
+  }, [drawerOpen, evidenceDrawerOpen]);
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
   function handleDragStart(e: React.DragEvent, idx: number) {
@@ -1330,16 +1847,25 @@ export default function AuditTool() {
     setAuditState("idle"); setUrl(""); setResult(null); setApiData(null);
     setIsRealAudit(false); setSiteContext(null); setError(""); setCopied(false);
     setDrawerOpen(false); setSelectedFinding(null);
+    setEvidenceDrawerOpen(false); setEvidenceFinding(null);
     setCategoryOrder(DEFAULT_CATEGORY_ORDER);
   }
 
   function openDrawer(finding: AuditFinding) {
     setSelectedFinding(finding);
     const recommended = getRecommendedTab(result?.detectedBuilder ?? null);
-    // Default to recommended tab if one exists, otherwise generic
     setActiveTab(recommended ?? "generic");
     setDrawerOpen(true);
     setCopiedPrompt(null);
+    // Mutually exclusive with evidence drawer
+    setEvidenceDrawerOpen(false);
+  }
+
+  function openEvidenceDrawer(finding: AuditFinding) {
+    setEvidenceFinding(finding);
+    setEvidenceDrawerOpen(true);
+    // Mutually exclusive with fix prompt drawer
+    setDrawerOpen(false);
   }
 
   function copyPrompt(tool: ToolId, prompt: string) {
@@ -1572,7 +2098,7 @@ export default function AuditTool() {
           {/* Findings table */}
           <div className="overflow-hidden rounded-xl border border-zinc-200">
             {/* Desktop header */}
-            <div className="hidden sm:grid sm:grid-cols-[90px_120px_1fr_1fr_1fr_70px_70px_110px] border-b border-zinc-200 bg-zinc-50 px-4 py-3 gap-3">
+            <div className="hidden sm:grid sm:grid-cols-[90px_120px_1fr_1fr_1fr_70px_70px_160px] border-b border-zinc-200 bg-zinc-50 px-4 py-3 gap-3">
               {["Priority","Category","Issue","Why it matters","Suggested fix","Effort","Impact",""].map((h) => (
                 <div key={h} className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{h}</div>
               ))}
@@ -1604,17 +2130,25 @@ export default function AuditTool() {
                           <span className="font-mono text-[10px] text-zinc-400">Effort: {f.effort}</span>
                           <span className="font-mono text-[10px] text-zinc-400">Impact: {f.impact}</span>
                         </div>
-                        <button
-                          onClick={() => openDrawer(f)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 font-mono text-[11px] text-white hover:bg-zinc-700 transition-colors"
-                        >
-                          Fix prompt →
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEvidenceDrawer(f)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 font-mono text-[11px] text-zinc-600 hover:border-zinc-400 transition-colors"
+                          >
+                            Evidence
+                          </button>
+                          <button
+                            onClick={() => openDrawer(f)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 font-mono text-[11px] text-white hover:bg-zinc-700 transition-colors"
+                          >
+                            Fix prompt →
+                          </button>
+                        </div>
                       </div>
                     </div>
 
                     {/* Desktop row */}
-                    <div className="hidden sm:grid sm:grid-cols-[90px_120px_1fr_1fr_1fr_70px_70px_110px] items-start gap-3 px-4 py-4">
+                    <div className="hidden sm:grid sm:grid-cols-[90px_120px_1fr_1fr_1fr_70px_70px_160px] items-start gap-3 px-4 py-4">
                       <div>
                         <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase ${cfg.badge}`}>
                           <span className={`h-1 w-1 rounded-full ${cfg.dot}`} />
@@ -1627,12 +2161,18 @@ export default function AuditTool() {
                       <div className="text-xs leading-relaxed text-zinc-600">{f.suggestedFix}</div>
                       <div><EffortBadge v={f.effort} /></div>
                       <div><ImpactBadge v={f.impact} /></div>
-                      <div>
+                      <div className="flex flex-col gap-1.5">
                         <button
                           onClick={() => openDrawer(f)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-2 font-mono text-[11px] text-white hover:bg-zinc-700 transition-colors whitespace-nowrap"
+                          className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-3 py-2 font-mono text-[11px] text-white hover:bg-zinc-700 transition-colors whitespace-nowrap"
                         >
                           Fix prompt →
+                        </button>
+                        <button
+                          onClick={() => openEvidenceDrawer(f)}
+                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 font-mono text-[11px] text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors whitespace-nowrap"
+                        >
+                          Show evidence
                         </button>
                       </div>
                     </div>
@@ -1834,6 +2374,158 @@ export default function AuditTool() {
                         <span className="font-semibold text-zinc-300">{TOOL_LABELS[activeTab]}</span>{" "}
                         as a focused, single-issue session. One fix per prompt produces significantly better results than batching multiple issues.
                       </p>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Evidence Drawer ───────────────────────────────────────────────── */}
+        {evidenceDrawerOpen && evidenceFinding && (() => {
+          const ev = buildFindingEvidence(evidenceFinding, apiData, url, isRealAudit);
+          const cfg = P_CONFIG[evidenceFinding.priority];
+
+          const STATUS_ICON: Record<string, string> = {
+            good: "✓",
+            warning: "⚠",
+            critical: "✗",
+            neutral: "—",
+          };
+          const STATUS_COLOR: Record<string, string> = {
+            good: "text-green-600",
+            warning: "text-amber-600",
+            critical: "text-red-600",
+            neutral: "text-zinc-400",
+          };
+          const STATUS_BG: Record<string, string> = {
+            good: "bg-green-50 border-green-200",
+            warning: "bg-amber-50 border-amber-200",
+            critical: "bg-red-50 border-red-200",
+            neutral: "bg-zinc-50 border-zinc-200",
+          };
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex"
+              onClick={(e) => { if (e.target === e.currentTarget) setEvidenceDrawerOpen(false); }}
+            >
+              {/* Backdrop */}
+              <div className="flex-1 bg-black/40 backdrop-blur-[2px]" onClick={() => setEvidenceDrawerOpen(false)} />
+
+              {/* Panel — white/light, distinct from the dark fix prompt panel */}
+              <div className="
+                fixed bottom-0 left-0 right-0 z-50
+                flex max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl
+                lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:max-h-none lg:w-[480px] lg:rounded-none lg:rounded-l-2xl
+              ">
+
+                {/* ── Header ─────────────────────────────────────────────────── */}
+                <div className="flex shrink-0 items-start justify-between border-b border-zinc-100 px-5 py-4">
+                  <div className="min-w-0 mr-4">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                        Evidence
+                      </span>
+                      <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] font-semibold ${cfg.badge}`}>
+                        <span className={`h-1 w-1 rounded-full ${cfg.dot}`} />
+                        {cfg.label}
+                      </span>
+                      <span className="font-mono text-[10px] text-zinc-400">{evidenceFinding.category}</span>
+                      <span className={`rounded px-1.5 py-px font-mono text-[9px] font-semibold ${ev.dataSource === "real" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                        {ev.dataSource === "real" ? "✓ Live page data" : "⚠ Heuristic"}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold leading-snug text-zinc-900 line-clamp-3">
+                      {evidenceFinding.issue}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setEvidenceDrawerOpen(false)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-700"
+                    aria-label="Close"
+                  >
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* ── Scrollable body ─────────────────────────────────────────── */}
+                <div className="flex-1 overflow-y-auto">
+                  <div className="space-y-5 p-5">
+
+                    {/* What the audit found */}
+                    <div>
+                      <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                        What the audit found
+                      </p>
+                      <p className="text-sm leading-relaxed text-zinc-700">
+                        {ev.summary}
+                      </p>
+                    </div>
+
+                    {/* Signal table */}
+                    <div>
+                      <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                        Signals used to detect this
+                      </p>
+                      <div className="overflow-hidden rounded-xl border border-zinc-200">
+                        {ev.signals.map((sig, i) => (
+                          <div
+                            key={sig.label}
+                            className={`flex items-start gap-3 px-4 py-3 ${i < ev.signals.length - 1 ? "border-b border-zinc-100" : ""} ${i % 2 === 0 ? "bg-white" : "bg-zinc-50/50"}`}
+                          >
+                            {/* Status icon */}
+                            <span className={`mt-0.5 shrink-0 font-mono text-xs font-bold w-4 text-center ${STATUS_COLOR[sig.status]}`}>
+                              {STATUS_ICON[sig.status]}
+                            </span>
+                            {/* Label */}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-mono text-[11px] font-semibold text-zinc-600">{sig.label}</p>
+                              {sig.note && (
+                                <p className="mt-0.5 font-mono text-[10px] text-zinc-400">{sig.note}</p>
+                              )}
+                            </div>
+                            {/* Value */}
+                            <div className={`shrink-0 max-w-[200px] rounded border px-2 py-0.5 font-mono text-[11px] ${STATUS_BG[sig.status]}`}>
+                              <span className="break-all leading-relaxed">{sig.value}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Why this finding was created */}
+                    <div>
+                      <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                        Why this finding was created
+                      </p>
+                      <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p className="text-xs leading-relaxed text-zinc-600">{ev.triggerReason}</p>
+                      </div>
+                    </div>
+
+                    {/* Separator + Fix Prompt CTA */}
+                    <div className="border-t border-zinc-100 pt-1">
+                      <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-700">Ready to fix this?</p>
+                          <p className="text-[11px] text-zinc-400">Open the fix prompt drawer for this finding</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setEvidenceDrawerOpen(false);
+                            openDrawer(evidenceFinding);
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 font-mono text-[11px] font-semibold text-white hover:bg-zinc-700 transition-colors"
+                        >
+                          Fix prompt →
+                        </button>
+                      </div>
                     </div>
 
                   </div>
